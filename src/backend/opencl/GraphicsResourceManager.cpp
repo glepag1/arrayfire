@@ -7,20 +7,18 @@
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
 
-#if defined(WITH_GRAPHICS)
-#include <platform.hpp>
 #include <GraphicsResourceManager.hpp>
+#include <platform.hpp>
 
-namespace opencl
-{
-ShrdResVector GraphicsResourceManager::registerResources(std::vector<uint32_t> resources)
-{
+namespace opencl {
+GraphicsResourceManager::ShrdResVector
+GraphicsResourceManager::registerResources(std::vector<uint32_t> resources) {
     ShrdResVector output;
 
-    for (auto id: resources)
-        output.emplace_back(new cl::BufferGL(getContext(), CL_MEM_WRITE_ONLY, id, NULL));
+    for (auto id : resources)
+        output.emplace_back(
+            new cl::BufferGL(getContext(), CL_MEM_WRITE_ONLY, id, NULL));
 
     return output;
 }
-}
-#endif
+}  // namespace opencl

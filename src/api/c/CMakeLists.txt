@@ -32,6 +32,7 @@ target_sources(c_api_interface
   ${ArrayFire_SOURCE_DIR}/include/af/internal.h
   ${ArrayFire_SOURCE_DIR}/include/af/lapack.h
   ${ArrayFire_SOURCE_DIR}/include/af/macros.h
+  ${ArrayFire_SOURCE_DIR}/include/af/ml.h
   ${ArrayFire_SOURCE_DIR}/include/af/opencl.h
   ${ArrayFire_SOURCE_DIR}/include/af/random.h
   ${ArrayFire_SOURCE_DIR}/include/af/seq.h
@@ -64,6 +65,7 @@ target_sources(c_api_interface
     ${CMAKE_CURRENT_SOURCE_DIR}/corrcoef.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/covariance.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/deconvolution.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/det.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/diff.cpp
@@ -112,6 +114,7 @@ target_sources(c_api_interface
     ${CMAKE_CURRENT_SOURCE_DIR}/ops.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/optypes.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/orb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/pinverse.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/print.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/qr.cpp
@@ -165,20 +168,12 @@ if(FreeImage_FOUND AND AF_WITH_IMAGEIO)
     target_link_libraries(c_api_interface INTERFACE FreeImage::FreeImage_STATIC)
   else ()
     target_include_directories(c_api_interface INTERFACE $<TARGET_PROPERTY:FreeImage::FreeImage,INTERFACE_INCLUDE_DIRECTORIES>)
-    target_link_libraries(c_api_interface INTERFACE ${CMAKE_DL_LIBS})
     if (WIN32 AND AF_INSTALL_STANDALONE)
       install(FILES $<TARGET_FILE:FreeImage::FreeImage>
         DESTINATION ${AF_INSTALL_BIN_DIR}
         COMPONENT common_backend_dependencies)
     endif ()
   endif ()
-endif()
-
-if(AF_WITH_GRAPHICS)
-    if(NOT AF_USE_SYSTEM_FORGE)
-      add_dependencies(c_api_interface forge-ext)
-    endif()
-    target_compile_definitions(c_api_interface INTERFACE WITH_GRAPHICS)
 endif()
 
 target_include_directories(c_api_interface

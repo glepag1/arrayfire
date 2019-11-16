@@ -42,11 +42,11 @@ Build from source by following instructions on our
 ## Examples
 
 The following examples are simplified versions of
-[`helloworld.cpp`](https://github.com/arrayfire/arrayfire/tree/devel/examples/helloworld/helloworld.cpp)
+[`helloworld.cpp`](https://github.com/arrayfire/arrayfire/blob/master/examples/helloworld/helloworld.cpp)
 and
-[`conway_pretty.cpp`](https://github.com/arrayfire/arrayfire/tree/devel/examples/graphics/conway_pretty.cpp),
+[`conway_pretty.cpp`](https://github.com/arrayfire/arrayfire/blob/master/examples/graphics/conway_pretty.cpp),
 respectively. For more code examples, visit the
-[`examples/`](https://github.com/arrayfire/arrayfire/tree/devel/examples)
+[`examples/`](https://github.com/arrayfire/arrayfire/blob/master/examples/)
 directory.
 
 #### Hello, world!
@@ -103,9 +103,13 @@ Quick links:
 * [Examples](http://www.arrayfire.org/docs/examples.htm)
 * [Blog](http://arrayfire.com/blog/)
 
-## Language wrappers
+## Language support
 
-ArrayFire has several official and third-party language wrappers.
+ArrayFire has several official and third-party language API`s:
+
+__Native__
+
+* [C++](http://arrayfire.org/docs/gettingstarted.htm#gettingstarted_api_usage)
 
 __Official wrappers__
 
@@ -121,7 +125,8 @@ Wrappers for other languages are a work-in-progress:
   [Java](https://github.com/arrayfire/arrayfire-java),
   [Lua](https://github.com/arrayfire/arrayfire-lua),
   [NodeJS](https://github.com/arrayfire/arrayfire-js),
-  [R](https://github.com/arrayfire/arrayfire-r)
+  [R](https://github.com/arrayfire/arrayfire-r),
+  [Ruby](https://github.com/arrayfire/arrayfire-rb)
 
 __Third-party wrappers__
 

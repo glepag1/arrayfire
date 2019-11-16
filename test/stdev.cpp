@@ -7,196 +7,205 @@
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
 
-#include <gtest/gtest.h>
 #include <arrayfire.h>
+#include <gtest/gtest.h>
+#include <testHelpers.hpp>
 #include <af/dim4.hpp>
 #include <af/traits.hpp>
-#include <string>
-#include <vector>
+#include <algorithm>
 #include <ctime>
 #include <iostream>
-#include <algorithm>
-#include <testHelpers.hpp>
+#include <string>
+#include <vector>
 
-using namespace af;
+using af::array;
+using af::cdouble;
+using af::cfloat;
+using af::dim4;
+using af::exception;
+using af::seq;
+using af::stdev;
+using std::cout;
+using std::endl;
 using std::string;
 using std::vector;
 
 template<typename T>
-class StandardDev : public ::testing::Test
-{
-    public:
-        virtual void SetUp() {}
+class StandardDev : public ::testing::Test {
+   public:
+    virtual void SetUp() {}
 };
 
 // create a list of types to be tested
-typedef ::testing::Types<float, double, int, uint, intl, uintl, char, uchar> TestTypes;
+typedef ::testing::Types<float, double, int, uint, intl, uintl, char, uchar>
+    TestTypes;
 
 // register the type list
 TYPED_TEST_CASE(StandardDev, TestTypes);
 
 template<typename T>
 struct f32HelperType {
-   typedef typename cond_type<is_same_type<T, double>::value,
-                                             double,
-                                             float>::type type;
+    typedef
+        typename cond_type<is_same_type<T, double>::value, double, float>::type
+            type;
 };
 
 template<typename T>
 struct c32HelperType {
-   typedef typename cond_type<is_same_type<T, cfloat>::value,
-                                             cfloat,
-                                             typename f32HelperType<T>::type >::type type;
+    typedef typename cond_type<is_same_type<T, cfloat>::value, cfloat,
+                               typename f32HelperType<T>::type>::type type;
 };
 
 template<typename T>
 struct elseType {
-   typedef typename cond_type< is_same_type<T, uintl>::value ||
-                               is_same_type<T, intl> ::value,
-                                              double,
-                                              T>::type type;
+    typedef typename cond_type<is_same_type<T, uintl>::value ||
+                                   is_same_type<T, intl>::value,
+                               double, T>::type type;
 };
 
 template<typename T>
 struct sdOutType {
-   typedef typename cond_type< is_same_type<T, float>   ::value ||
-                               is_same_type<T, int>     ::value ||
-                               is_same_type<T, uint>    ::value ||
-                               is_same_type<T, uchar>   ::value ||
-                               is_same_type<T, short>   ::value ||
-                               is_same_type<T, ushort>  ::value ||
-                               is_same_type<T, char>    ::value,
-                                              float,
-                              typename elseType<T>::type>::type type;
+    typedef typename cond_type<
+        is_same_type<T, float>::value || is_same_type<T, int>::value ||
+            is_same_type<T, uint>::value || is_same_type<T, uchar>::value ||
+            is_same_type<T, short>::value || is_same_type<T, ushort>::value ||
+            is_same_type<T, char>::value,
+        float, typename elseType<T>::type>::type type;
 };
 
 template<typename T>
-void stdevDimTest(string pFileName, dim_t dim=-1)
-{
+void stdevDimTest(string pFileName, dim_t dim = -1) {
     typedef typename sdOutType<T>::type outType;
-    if (noDoubleTests<T>()) return;
-    if (noDoubleTests<outType>()) return;
+    SUPPORTED_TYPE_CHECK(T);
+    SUPPORTED_TYPE_CHECK(outType);
 
-    vector<af::dim4>      numDims;
-    vector<vector<int> >       in;
-    vector<vector<float> >  tests;
+    vector<dim4> numDims;
+    vector<vector<int> > in;
+    vector<vector<float> > tests;
 
-    readTestsFromFile<int,float>(pFileName, numDims, in, tests);
+    readTestsFromFile<int, float>(pFileName, numDims, in, tests);
 
-    af::dim4 dims = numDims[0];
+    dim4 dims = numDims[0];
     vector<T> input(in[0].begin(), in[0].end());
 
-    af::array a(dims, &(input.front()));
+    array a(dims, &(input.front()));
 
-    af::array b = stdev(a, dim);
+    array b = stdev(a, dim);
 
     vector<outType> currGoldBar(tests[0].begin(), tests[0].end());
 
-    size_t nElems    = currGoldBar.size();
-    std::vector<outType> outData(nElems);
+    size_t nElems = currGoldBar.size();
+    vector<outType> outData(nElems);
 
     b.host((void*)outData.data());
 
-    for (size_t elIter=0; elIter<nElems; ++elIter) {
-        ASSERT_NEAR(::real(currGoldBar[elIter]), ::real(outData[elIter]), 1.0e-3)<< "at: " << elIter<< std::endl;
-        ASSERT_NEAR(::imag(currGoldBar[elIter]), ::imag(outData[elIter]), 1.0e-3)<< "at: " << elIter<< std::endl;
+    for (size_t elIter = 0; elIter < nElems; ++elIter) {
+        ASSERT_NEAR(::real(currGoldBar[elIter]), ::real(outData[elIter]),
+                    1.0e-3)
+            << "at: " << elIter << endl;
+        ASSERT_NEAR(::imag(currGoldBar[elIter]), ::imag(outData[elIter]),
+                    1.0e-3)
+            << "at: " << elIter << endl;
     }
 }
 
-TYPED_TEST(StandardDev, Dim0)
-{
+TYPED_TEST(StandardDev, Dim0) {
     stdevDimTest<TypeParam>(string(TEST_DIR "/stdev/mat_10x10_dim0.test"), 0);
 }
 
-TYPED_TEST(StandardDev, Dim1)
-{
+TYPED_TEST(StandardDev, Dim1) {
     stdevDimTest<TypeParam>(string(TEST_DIR "/stdev/mat_10x10_dim1.test"), 1);
 }
 
-TYPED_TEST(StandardDev, Dim2)
-{
-    stdevDimTest<TypeParam>(string(TEST_DIR "/stdev/hypercube_10x10x5x5_dim2.test"), 2);
+TYPED_TEST(StandardDev, Dim2) {
+    stdevDimTest<TypeParam>(
+        string(TEST_DIR "/stdev/hypercube_10x10x5x5_dim2.test"), 2);
 }
 
-TYPED_TEST(StandardDev, Dim3)
-{
-    stdevDimTest<TypeParam>(string(TEST_DIR "/stdev/hypercube_10x10x5x5_dim3.test"), 3);
+TYPED_TEST(StandardDev, Dim3) {
+    stdevDimTest<TypeParam>(
+        string(TEST_DIR "/stdev/hypercube_10x10x5x5_dim3.test"), 3);
 }
 
-TEST(StandardDev, InvalidDim)
-{
-    ASSERT_THROW(af::stdev(af::array(), 5), af::exception);
-}
+TEST(StandardDev, InvalidDim) { ASSERT_THROW(stdev(array(), 5), exception); }
 
-TEST(StandardDev, InvalidType)
-{
-    ASSERT_THROW(af::stdev(constant(cdouble(1.0, -1.0), 10)), af::exception);
+TEST(StandardDev, InvalidType) {
+    ASSERT_THROW(stdev(constant(cdouble(1.0, -1.0), 10)), exception);
 }
 
 template<typename T>
-void stdevDimIndexTest(string pFileName, dim_t dim=-1)
-{
+void stdevDimIndexTest(string pFileName, dim_t dim = -1) {
     typedef typename sdOutType<T>::type outType;
-    if (noDoubleTests<T>()) return;
-    if (noDoubleTests<outType>()) return;
+    SUPPORTED_TYPE_CHECK(T);
+    SUPPORTED_TYPE_CHECK(outType);
 
-    vector<af::dim4>      numDims;
-    vector<vector<int> >       in;
-    vector<vector<float> >  tests;
+    vector<dim4> numDims;
+    vector<vector<int> > in;
+    vector<vector<float> > tests;
 
-    readTestsFromFile<int,float>(pFileName, numDims, in, tests);
+    readTestsFromFile<int, float>(pFileName, numDims, in, tests);
 
-    af::dim4 dims = numDims[0];
+    dim4 dims = numDims[0];
     vector<T> input(in[0].begin(), in[0].end());
 
-    af::array a(dims, &(input.front()));
-    af::array b = a(seq(2,6), seq(1,7));
+    array a(dims, &(input.front()));
+    array b = a(seq(2, 6), seq(1, 7));
 
-    af::array c = stdev(b, dim);
+    array c = stdev(b, dim);
 
     vector<outType> currGoldBar(tests[0].begin(), tests[0].end());
 
-    size_t nElems    = currGoldBar.size();
-    std::vector<outType> outData(nElems);
+    size_t nElems = currGoldBar.size();
+    vector<outType> outData(nElems);
 
     c.host((void*)outData.data());
 
-    for (size_t elIter=0; elIter<nElems; ++elIter) {
-        ASSERT_NEAR(::real(currGoldBar[elIter]), ::real(outData[elIter]), 1.0e-3)<< "at: " << elIter<< std::endl;
-        ASSERT_NEAR(::imag(currGoldBar[elIter]), ::imag(outData[elIter]), 1.0e-3)<< "at: " << elIter<< std::endl;
+    for (size_t elIter = 0; elIter < nElems; ++elIter) {
+        ASSERT_NEAR(::real(currGoldBar[elIter]), ::real(outData[elIter]),
+                    1.0e-3)
+            << "at: " << elIter << endl;
+        ASSERT_NEAR(::imag(currGoldBar[elIter]), ::imag(outData[elIter]),
+                    1.0e-3)
+            << "at: " << elIter << endl;
     }
 }
 
-TYPED_TEST(StandardDev, IndexedArrayDim0)
-{
-    stdevDimIndexTest<TypeParam>(string(TEST_DIR "/stdev/mat_10x10_seq2_6x1_7_dim0.test"), 0);
+TYPED_TEST(StandardDev, IndexedArrayDim0) {
+    stdevDimIndexTest<TypeParam>(
+        string(TEST_DIR "/stdev/mat_10x10_seq2_6x1_7_dim0.test"), 0);
 }
 
-TYPED_TEST(StandardDev, IndexedArrayDim1)
-{
-    stdevDimIndexTest<TypeParam>(string(TEST_DIR "/stdev/mat_10x10_seq2_6x1_7_dim1.test"), 1);
+TYPED_TEST(StandardDev, IndexedArrayDim1) {
+    stdevDimIndexTest<TypeParam>(
+        string(TEST_DIR "/stdev/mat_10x10_seq2_6x1_7_dim1.test"), 1);
 }
 
-TYPED_TEST(StandardDev, All)
-{
+TYPED_TEST(StandardDev, All) {
     typedef typename sdOutType<TypeParam>::type outType;
-    if (noDoubleTests<TypeParam>()) return;
-    if (noDoubleTests<outType>()) return;
+    SUPPORTED_TYPE_CHECK(TypeParam);
+    SUPPORTED_TYPE_CHECK(outType);
 
-    vector<af::dim4>      numDims;
-    vector<vector<int> >       in;
-    vector<vector<float> >  tests;
+    vector<dim4> numDims;
+    vector<vector<int> > in;
+    vector<vector<float> > tests;
 
-    readTestsFromFile<int,float>(string(TEST_DIR "/stdev/mat_10x10_scalar.test"),
-                                 numDims, in, tests);
+    readTestsFromFile<int, float>(
+        string(TEST_DIR "/stdev/mat_10x10_scalar.test"), numDims, in, tests);
 
-    af::dim4 dims = numDims[0];
-    vector<TypeParam> input(in[0].begin(), in[0].end());
+    dim4 dims = numDims[0];
+    vector<TypeParam> input(in[0].size());
+    transform(in[0].begin(), in[0].end(),
+              input.begin(),
+              convert_to<TypeParam, int>);
 
-    af::array a(dims, &(input.front()));
+    array a(dims, &(input.front()));
     outType b = stdev<outType>(a);
 
-    vector<outType> currGoldBar(tests[0].begin(), tests[0].end());
+    vector<outType> currGoldBar(tests[0].size());
+    transform(tests[0].begin(), tests[0].end(),
+              currGoldBar.begin(),
+              convert_to<outType, float>);
+
     ASSERT_NEAR(::real(currGoldBar[0]), ::real(b), 1.0e-3);
     ASSERT_NEAR(::imag(currGoldBar[0]), ::imag(b), 1.0e-3);
 }

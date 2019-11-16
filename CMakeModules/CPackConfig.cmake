@@ -3,7 +3,7 @@
 #
 # This file is distributed under 3-clause BSD license.
 # The complete license agreement can be obtained at:
-# http://arrayfire.com/licenses/BSD-3-Clause
+# https://arrayfire.com/licenses/BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.5)
 
@@ -12,14 +12,14 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/n
 include(Version)
 include(CPackIFW)
 
-set(CPACK_GENERATOR "STGZ;TGZ" CACHE STRINGS "STGZ;TGZ;DEB;RPM;productbuild")
+set(CPACK_GENERATOR "STGZ;TGZ" CACHE STRING "STGZ;TGZ;DEB;RPM;productbuild")
 set_property(CACHE CPACK_GENERATOR PROPERTY STRINGS STGZ DEB RPM productbuild)
 mark_as_advanced(CPACK_GENERATOR)
 
 set(VENDOR_NAME "ArrayFire")
 set(LIBRARY_NAME ${PROJECT_NAME})
 string(TOLOWER "${LIBRARY_NAME}" APP_LOW_NAME)
-set(SITE_URL "www.arrayfire.com")
+set(SITE_URL "https://arrayfire.com")
 
 # Long description of the package
 set(CPACK_PACKAGE_DESCRIPTION
@@ -62,11 +62,7 @@ if (WIN32)
   set(inst_pkg_hash "-${GIT_COMMIT_HASH}")
 endif ()
 
-if(AF_WITH_GRAPHICS)
-  set(CPACK_PACKAGE_FILE_NAME "${inst_pkg_name}${inst_pkg_hash}")
-else()
-  set(CPACK_PACKAGE_FILE_NAME "${inst_pkg_name}-no-gl${inst_pkg_hash}")
-endif()
+set(CPACK_PACKAGE_FILE_NAME "${inst_pkg_name}${inst_pkg_hash}")
 
 # Platform specific settings for CPACK generators
 # - OSX specific
@@ -264,7 +260,6 @@ endif ()
 
 get_native_path(zlib_lic_path "${CMAKE_SOURCE_DIR}/LICENSES/zlib-libpng License.txt")
 get_native_path(boost_lic_path "${CMAKE_SOURCE_DIR}/LICENSES/Boost Software License.txt")
-get_native_path(mit_lic_path "${CMAKE_SOURCE_DIR}/LICENSES/MIT License.txt")
 get_native_path(fimg_lic_path "${CMAKE_SOURCE_DIR}/LICENSES/FreeImage Public License.txt")
 get_native_path(apache_lic_path "${CMAKE_SOURCE_DIR}/LICENSES/Apache-2.0.txt")
 get_native_path(sift_lic_path "${CMAKE_SOURCE_DIR}/LICENSES/OpenSIFT License.txt")
@@ -292,7 +287,7 @@ cpack_ifw_configure_component(cmake)
 cpack_ifw_configure_component(documentation)
 cpack_ifw_configure_component(examples)
 cpack_ifw_configure_component(licenses FORCED_INSTALLATION
-  LICENSES "GLFW" ${zlib_lic_path} "glbinding" ${mit_lic_path} "FreeImage" ${fimg_lic_path}
+  LICENSES "GLFW" ${zlib_lic_path} "FreeImage" ${fimg_lic_path}
   "Boost" ${boost_lic_path} "clBLAS, clFFT" ${apache_lic_path} "SIFT" ${sift_lic_path}
   "BSD3" ${bsd3_lic_path} "Intel MKL" ${issl_lic_path}
 )
@@ -312,10 +307,15 @@ set(CPACK_DEBIAN_PACKAGE_HOMEPAGE http://www.arrayfire.com)
 ##
 # RPM package
 ##
-set(CPACK_RPM_PACKAGE_LICENSE "BSD")
+set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
 set(CPACK_RPM_PACKAGE_AUTOREQPROV " no")
+set(CPACK_RPM_PACKAGE_GROUP "Development/Libraries")
+set(CPACK_RPM_PACKAGE_LICENSE "BSD")
+set(CPACK_RPM_PACKAGE_URL "${SITE_URL}")
+if(AF_BUILD_FORGE)
+    set(CPACK_RPM_PACKAGE_SUGGESTS "fontconfig-devel, libX11, libXrandr, libXinerama, libXxf86vm, libXcursor, mesa-libGL-devel")
+endif()
 
-set(CPACK_PACKAGE_GROUP "Development/Libraries")
 ##
 # Source package
 ##

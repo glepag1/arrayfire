@@ -20,12 +20,18 @@ include(platform)
 include(GetPrerequisites)
 include(CheckCXXCompilerFlag)
 
+set_policies(
+  TYPE NEW
+  POLICIES CMP0073
+           CMP0074)
 arrayfire_set_cmake_default_variables()
+
+#Set Intel OpenMP as default MKL thread layer
+set(MKL_THREAD_LAYER "Intel OpenMP" CACHE STRING "The thread layer to choose for MKL")
 
 find_package(CUDA 7.0)
 find_package(OpenCL 1.2)
 find_package(OpenGL)
-find_package(OpenMP)
 find_package(FreeImage)
 find_package(Threads)
 find_package(FFTW)
@@ -33,11 +39,7 @@ find_package(CBLAS)
 find_package(LAPACKE)
 find_package(Doxygen)
 find_package(MKL)
-find_package(spdlog QUIET)
 
-# Graphics dependencies
-find_package(glbinding QUIET)
-find_package(Forge QUIET)
 include(boost_package)
 
 option(AF_BUILD_CPU      "Build ArrayFire with a CPU backend"        ON)
@@ -46,18 +48,17 @@ option(AF_BUILD_OPENCL   "Build ArrayFire with a OpenCL backend"     ${OpenCL_FO
 option(AF_BUILD_UNIFIED  "Build Backend-Independent ArrayFire API"   ON)
 option(AF_BUILD_DOCS     "Create ArrayFire Documentation"            ${DOXYGEN_FOUND})
 option(AF_BUILD_EXAMPLES "Build Examples"                            ON)
+option(AF_BUILD_FORGE
+    "Forge libs are not built by default as it is not link time dependency" OFF)
 
-option(AF_WITH_GRAPHICS "Build ArrayFire with Forge Graphics"  $<AND:${OPENGL_FOUND},${Forge_FOUND},${glbinding_FOUND}>)
 option(AF_WITH_NONFREE  "Build ArrayFire nonfree algorithms"   OFF)
-option(AF_WITH_LOGGING  "Build ArrayFire with logging support" ${spdlog_FOUND})
+option(AF_WITH_LOGGING  "Build ArrayFire with logging support" ON)
 
 option(AF_INSTALL_STANDALONE "Build installers that include all dependencies" OFF)
 
 cmake_dependent_option(AF_WITH_RELATIVE_TEST_DIR "Use relative paths for the test data directory(For continious integration(CI) purposes only)" OFF
   "BUILD_TESTING" OFF)
 
-cmake_dependent_option(AF_USE_SYSTEM_FORGE "Use system Forge" OFF
-                       "AF_WITH_GRAPHICS" OFF)
 cmake_dependent_option(AF_WITH_IMAGEIO "Build ArrayFire with Image IO support" ${FreeImage_FOUND}
                        "FreeImage_FOUND" OFF)
 cmake_dependent_option(AF_BUILD_FRAMEWORK "Build an ArrayFire framework for Apple platforms.(Experimental)" OFF
@@ -71,7 +72,6 @@ af_deprecate(BUILD_CPU             AF_BUILD_CPU)
 af_deprecate(BUILD_CUDA            AF_BUILD_CUDA)
 af_deprecate(BUILD_OPENCL          AF_BUILD_OPENCL)
 af_deprecate(BUILD_UNIFIED         AF_BUILD_UNIFIED)
-af_deprecate(BUILD_GRAPHICS        AF_WITH_GRAPHICS)
 af_deprecate(BUILD_DOCS            AF_BUILD_DOCS)
 af_deprecate(BUILD_NONFREE         AF_WITH_NONFREE)
 af_deprecate(BUILD_EXAMPLES        AF_BUILD_EXAMPLES)
@@ -82,19 +82,17 @@ af_deprecate(USE_CPUID             AF_WITH_CPUID)
 mark_as_advanced(
   AF_BUILD_FRAMEWORK
   AF_INSTALL_STANDALONE
-  AF_USE_SYSTEM_FORGE
   AF_WITH_CPUID
   CUDA_HOST_COMPILER
   CUDA_USE_STATIC_CUDA_RUNTIME
-  CUDA_rt_LIBRARY)
+  CUDA_rt_LIBRARY
+  SPDLOG_BUILD_EXAMPLES
+  SPDLOG_BUILD_TESTING)
 
-# TODO(umar): Add definitions should not be used. Instead use
-arrayfire_get_platform_definitions(platform_definitions)
-add_definitions(${platform_definitions})
-
-if(AF_WITH_GRAPHICS AND NOT AF_USE_SYSTEM_FORGE)
-  include(build_forge)
-endif()
+#Configure forge submodule
+#forge is included in ALL target if AF_BUILD_FORGE is ON
+#otherwise, forge is not built at all
+include(AFconfigure_forge_submodule)
 
 configure_file(
     ${ArrayFire_SOURCE_DIR}/CMakeModules/version.hpp.in
@@ -139,6 +137,9 @@ if(NOT LAPACK_FOUND)
     endif()
 endif()
 
+set(SPDLOG_BUILD_TESTING OFF)
+add_subdirectory(extern/spdlog EXCLUDE_FROM_ALL)
+add_subdirectory(extern/glad)
 add_subdirectory(src/backend/common)
 add_subdirectory(src/api/c)
 add_subdirectory(src/api/cpp)
@@ -179,6 +180,10 @@ endif()
 
 foreach(backend ${built_backends})
   target_compile_definitions(${backend} PRIVATE AFDLL)
+  if(AF_WITH_LOGGING)
+    target_compile_definitions(${backend}
+      PRIVATE AF_WITH_LOGGING)
+  endif()
 endforeach()
 
 if(AF_BUILD_FRAMEWORK)
@@ -204,36 +209,11 @@ install(DIRECTORY include/ DESTINATION ${AF_INSTALL_INC_DIR}
 ## The ArrayFire version file is generated and won't be included above, install
 ## it separately.
 install(FILES ${ArrayFire_BINARY_DIR}/include/af/version.h
+              ${ArrayFire_BINARY_DIR}/include/af/compilers.h
         DESTINATION "${AF_INSTALL_INC_DIR}/af/"
         COMPONENT headers)
 
-if(Forge_FOUND AND NOT AF_USE_SYSTEM_FORGE)
-    option(AF_INSTALL_FORGE_DEV "Install Forge Header and Share Files with ArrayFire" OFF)
-    mark_as_advanced(AF_INSTALL_FORGE_DEV)
-    af_deprecate(INSTALL_FORGE_DEV AF_INSTALL_FORGE_DEV)
-    if(AF_INSTALL_FORGE_DEV)
-        install(DIRECTORY "${ArrayFire_BINARY_DIR}/third_party/forge/include/"
-                DESTINATION "${AF_INSTALL_INC_DIR}"
-                COMPONENT headers
-        )
-        install(DIRECTORY "${ArrayFire_BINARY_DIR}/third_party/forge/share/Forge/"
-                DESTINATION "${AF_INSTALL_DATA_DIR}/../Forge"
-                COMPONENT share
-        )
-        install(DIRECTORY "${ArrayFire_BINARY_DIR}/third_party/forge/lib/"
-                DESTINATION "${AF_INSTALL_LIB_DIR}"
-                COMPONENT forge
-        )
-    endif()
-    #install forge library & dependencies
-    set(fg_dlib_px "bin")
-    if (UNIX)
-      set(fg_dlib_px "lib")
-    endif ()
-    install(DIRECTORY "${PROJECT_BINARY_DIR}/third_party/forge/${fg_dlib_px}/"
-      DESTINATION "${AF_INSTALL_BIN_DIR}"
-      COMPONENT common_backend_dependencies)
-endif()
+#TODO(pradeep) install forge dependency for packaging - not required for builds
 
 # install the examples irrespective of the AF_BUILD_EXAMPLES value
 # only the examples source files are installed, so the installation of these
@@ -293,14 +273,14 @@ if((USE_CPU_MKL OR USE_OPENCL_MKL) AND TARGET MKL::MKL AND AF_INSTALL_STANDALONE
   if(TARGET MKL::ThreadingLibrary)
     install(FILES
       $<TARGET_FILE:MKL::ThreadingLibrary>
-      DESTINATION ${AF_INSTALL_BIN_DIR}
+      DESTINATION ${AF_INSTALL_LIB_DIR}
       COMPONENT mkl_dependencies)
   endif()
 
   if(NOT WIN32)
     install(FILES
       $<TARGET_FILE:MKL::Interface>
-      DESTINATION ${AF_INSTALL_BIN_DIR}
+      DESTINATION ${AF_INSTALL_LIB_DIR}
       COMPONENT mkl_dependencies)
   endif()
 
@@ -313,7 +293,7 @@ if((USE_CPU_MKL OR USE_OPENCL_MKL) AND TARGET MKL::MKL AND AF_INSTALL_STANDALONE
     # is a linker script and not a symlink so it cant be resolved using
     # get_filename_component
     ${AF_ADDITIONAL_MKL_LIBRARIES}
-    DESTINATION ${AF_INSTALL_BIN_DIR}
+    DESTINATION ${AF_INSTALL_LIB_DIR}
     COMPONENT mkl_dependencies)
 endif()
 
@@ -340,6 +320,10 @@ configure_package_config_file(
 # CMake for examples and tests.
 unset(CMAKE_CXX_VISIBILITY_PRESET)
 
+configure_file(
+  ${CMAKE_MODULE_PATH}/CTestCustom.cmake
+  ${ArrayFire_BINARY_DIR}/CTestCustom.cmake)
+
 include(CTest)
 
 # Handle depricated BUILD_TEST variable if found.
@@ -354,4 +338,3 @@ conditional_directory(AF_BUILD_EXAMPLES examples)
 conditional_directory(AF_BUILD_DOCS docs)
 
 include(CPackConfig)
-

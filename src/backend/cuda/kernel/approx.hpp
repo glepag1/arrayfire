@@ -7,148 +7,82 @@
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
 
-#include <math.hpp>
-#include <common/dispatch.hpp>
 #include <Param.hpp>
-#include <err_cuda.hpp>
+#include <common/dispatch.hpp>
 #include <debug_cuda.hpp>
-#include "interp.hpp"
+#include <nvrtc/cache.hpp>
+#include <nvrtc_kernel_headers/approx1_cuh.hpp>
+#include <nvrtc_kernel_headers/approx2_cuh.hpp>
+#include <af/defines.h>
 
-namespace cuda
-{
-    namespace kernel
-    {
-        // Kernel Launch Config Values
-        static const int TX = 16;
-        static const int TY = 16;
-        static const int THREADS = 256;
+#include <string>
 
-        template<typename Ty, typename Tp, int order>
-        __global__
-        void approx1_kernel(Param<Ty> out, CParam<Ty> in, CParam<Tp> xpos,
-                            const float offGrid, const int blocksMatX, const bool batch,
-                            af_interp_type method)
-        {
-            const int idy = blockIdx.x / blocksMatX;
-            const int blockIdx_x = blockIdx.x - idy * blocksMatX;
-            const int idx = blockIdx_x * blockDim.x + threadIdx.x;
+namespace cuda {
+namespace kernel {
 
-            const int idw = (blockIdx.y + blockIdx.z * gridDim.y) / out.dims[2];
-            const int idz = (blockIdx.y + blockIdx.z * gridDim.y) - idw * out.dims[2];
+// Kernel Launch Config Values
+static const int TX      = 16;
+static const int TY      = 16;
+static const int THREADS = 256;
 
-            if (idx >= out.dims[0] || idy >= out.dims[1] ||
-                idz >= out.dims[2] || idw >= out.dims[3])
-                return;
+template<typename Ty, typename Tp>
+void approx1(Param<Ty> yo, CParam<Ty> yi, CParam<Tp> xo, const int xdim,
+             const Tp &xi_beg, const Tp &xi_step, const float offGrid,
+             const af::interpType method, const int order) {
+    static const std::string source(approx1_cuh, approx1_cuh_len);
 
-            const int omId = idw * out.strides[3] + idz * out.strides[2]
-                                               + idy * out.strides[1] + idx;
-            int xmid = idx;
-            if(batch) xmid += idw * xpos.strides[3] + idz * xpos.strides[2] + idy * xpos.strides[1];
+    auto approx1 = getKernel(
+        "cuda::approx1", source,
+        {TemplateTypename<Ty>(), TemplateTypename<Tp>(), TemplateArg(order)});
 
-            const Tp x = xpos.ptr[xmid];
-            if (x < 0 || in.dims[0] < x+1) {
-                out.ptr[omId] = scalar<Ty>(offGrid);
-                return;
-            }
+    dim3 threads(THREADS, 1, 1);
+    int blocksPerMat = divup(yo.dims[0], threads.x);
+    dim3 blocks(blocksPerMat * yo.dims[1], yo.dims[2] * yo.dims[3]);
 
-            int ioff = idw * in.strides[3] + idz * in.strides[2] + idy * in.strides[1];
+    bool batch = !(xo.dims[1] == 1 && xo.dims[2] == 1 && xo.dims[3] == 1);
 
-            // FIXME: Only cubic interpolation is doing clamping
-            // We need to make it consistent across all methods
-            // Not changing the behavior because tests will fail
-            bool clamp = order == 3;
+    const int maxBlocksY =
+        cuda::getDeviceProp(cuda::getActiveDeviceId()).maxGridSize[1];
+    blocks.z = divup(blocks.y, maxBlocksY);
+    blocks.y = divup(blocks.y, blocks.z);
 
-            Interp1<Ty, Tp, order> interp;
-            interp(out, omId, in, ioff, x, method, 1, clamp);
-        }
+    EnqueueArgs qArgs(blocks, threads, getActiveStream());
 
-        template<typename Ty, typename Tp, int order>
-        __global__
-        void approx2_kernel(Param<Ty> out, CParam<Ty> in,
-                            CParam<Tp> xpos, CParam<Tp> ypos, const float offGrid,
-                            const int blocksMatX, const int blocksMatY, const bool batch,
-                            af_interp_type method)
-        {
-            const int idz = blockIdx.x / blocksMatX;
-            const int blockIdx_x = blockIdx.x - idz * blocksMatX;
-            const int idx = threadIdx.x + blockIdx_x * blockDim.x;
+    approx1(qArgs, yo, yi, xo, xdim, xi_beg, xi_step, offGrid, blocksPerMat,
+            batch, method);
 
-            const int idw = (blockIdx.y + blockIdx.z * gridDim.y) / blocksMatY;
-            const int blockIdx_y = (blockIdx.y + blockIdx.z * gridDim.y) - idw * blocksMatY;
-            const int idy = threadIdx.y + blockIdx_y * blockDim.y;
-
-            if (idx >= out.dims[0] || idy >= out.dims[1] ||
-                idz >= out.dims[2] || idw >= out.dims[3])
-                return;
-
-            const int omId = idw * out.strides[3] + idz * out.strides[2]
-                + idy * out.strides[1] + idx;
-            int xmid = idy * xpos.strides[1] + idx;
-            int ymid = idy * ypos.strides[1] + idx;
-            if(batch) {
-                xmid += idw * xpos.strides[3] + idz * xpos.strides[2];
-                ymid += idw * ypos.strides[3] + idz * ypos.strides[2];
-            }
-
-            const Tp x = xpos.ptr[xmid], y = ypos.ptr[ymid];
-            if (x < 0 || y < 0 || in.dims[0] < x+1 || in.dims[1] < y+1) {
-                out.ptr[omId] = scalar<Ty>(offGrid);
-                return;
-            }
-
-            int ioff = idw * in.strides[3] + idz * in.strides[2];
-
-            // FIXME: Only cubic interpolation is doing clamping
-            // We need to make it consistent across all methods
-            // Not changing the behavior because tests will fail
-            bool clamp = order == 3;
-
-            Interp2<Ty, Tp, order> interp;
-            interp(out, omId, in, ioff, x, y, method, 1, clamp);
-        }
-
-        ///////////////////////////////////////////////////////////////////////////
-        // Wrapper functions
-        ///////////////////////////////////////////////////////////////////////////
-        template <typename Ty, typename Tp, int order>
-        void approx1(Param<Ty> out, CParam<Ty> in,
-                     CParam<Tp> xpos, const float offGrid,
-                     af_interp_type method)
-        {
-            dim3 threads(THREADS, 1, 1);
-            int blocksPerMat = divup(out.dims[0], threads.x);
-            dim3 blocks(blocksPerMat * out.dims[1], out.dims[2] * out.dims[3]);
-
-            bool batch = !(xpos.dims[1] == 1 && xpos.dims[2] == 1 && xpos.dims[3] == 1);
-
-            const int maxBlocksY    = cuda::getDeviceProp(cuda::getActiveDeviceId()).maxGridSize[1];
-            blocks.z = divup(blocks.y, maxBlocksY);
-            blocks.y = divup(blocks.y, blocks.z);
-
-            CUDA_LAUNCH((approx1_kernel<Ty, Tp, order>), blocks, threads,
-                            out, in, xpos, offGrid, blocksPerMat, batch, method);
-            POST_LAUNCH_CHECK();
-        }
-
-        template <typename Ty, typename Tp, int order>
-        void approx2(Param<Ty> out, CParam<Ty> in,
-                     CParam<Tp> xpos, CParam<Tp> ypos, const float offGrid,
-                     af_interp_type method)
-        {
-            dim3 threads(TX, TY, 1);
-            int blocksPerMatX = divup(out.dims[0], threads.x);
-            int blocksPerMatY = divup(out.dims[1], threads.y);
-            dim3 blocks(blocksPerMatX * out.dims[2], blocksPerMatY * out.dims[3]);
-
-            bool batch = !(xpos.dims[2] == 1 && xpos.dims[3] == 1);
-
-            const int maxBlocksY    = cuda::getDeviceProp(cuda::getActiveDeviceId()).maxGridSize[1];
-            blocks.z = divup(blocks.y, maxBlocksY);
-            blocks.y = divup(blocks.y, blocks.z);
-
-            CUDA_LAUNCH((approx2_kernel<Ty, Tp, order>), blocks, threads,
-                        out, in, xpos, ypos, offGrid, blocksPerMatX, blocksPerMatY, batch, method);
-            POST_LAUNCH_CHECK();
-        }
-    }
+    POST_LAUNCH_CHECK();
 }
+
+template<typename Ty, typename Tp>
+void approx2(Param<Ty> zo, CParam<Ty> zi, CParam<Tp> xo, const int xdim,
+             const Tp &xi_beg, const Tp &xi_step, CParam<Tp> yo, const int ydim,
+             const Tp &yi_beg, const Tp &yi_step, const float offGrid,
+             const af::interpType method, const int order) {
+    static const std::string source(approx2_cuh, approx2_cuh_len);
+
+    auto approx2 = getKernel(
+        "cuda::approx2", source,
+        {TemplateTypename<Ty>(), TemplateTypename<Tp>(), TemplateArg(order)});
+
+    dim3 threads(TX, TY, 1);
+    int blocksPerMatX = divup(zo.dims[0], threads.x);
+    int blocksPerMatY = divup(zo.dims[1], threads.y);
+    dim3 blocks(blocksPerMatX * zo.dims[2], blocksPerMatY * zo.dims[3]);
+
+    bool batch = !(xo.dims[2] == 1 && xo.dims[3] == 1);
+
+    const int maxBlocksY =
+        cuda::getDeviceProp(cuda::getActiveDeviceId()).maxGridSize[1];
+    blocks.z = divup(blocks.y, maxBlocksY);
+    blocks.y = divup(blocks.y, blocks.z);
+
+    EnqueueArgs qArgs(blocks, threads, getActiveStream());
+
+    approx2(qArgs, zo, zi, xo, xdim, xi_beg, xi_step, yo, ydim, yi_beg, yi_step,
+            offGrid, blocksPerMatX, blocksPerMatY, batch, method);
+
+    POST_LAUNCH_CHECK();
+}
+}  // namespace kernel
+}  // namespace cuda

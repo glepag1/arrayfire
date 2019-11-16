@@ -1,9 +1,9 @@
 CMakeCache.txt
 CMakeFiles/
 build*/
+Release/
 Makefile
 cmake_install.cmake
-**~
 GTAGS
 GRTAGS
 GPATH
@@ -11,3 +11,4 @@ GPATH
 docs/details/examples.dox
 /TAGS
 external/
+compile_commands.json

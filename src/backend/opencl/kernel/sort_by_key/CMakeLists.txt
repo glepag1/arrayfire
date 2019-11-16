@@ -30,10 +30,16 @@ foreach(SBK_TYPE ${SBK_TYPES})
         ../../api/c
         ../common
         ../../../include
-        ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR})
+
+    target_include_directories(opencl_sort_by_key_${SBK_TYPE}
+      SYSTEM PRIVATE
         $<TARGET_PROPERTY:OpenCL::OpenCL,INTERFACE_INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:OpenCL::cl2hpp,INTERFACE_INCLUDE_DIRECTORIES>
         $<TARGET_PROPERTY:Boost::boost,INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:af_glad_interface,INTERFACE_INCLUDE_DIRECTORIES>
+        ${ArrayFire_SOURCE_DIR}/extern/forge/include
+        ${ArrayFire_BINARY_DIR}/extern/forge/include
       )
 
     set_target_properties(opencl_sort_by_key_${SBK_TYPE}
@@ -41,9 +47,11 @@ foreach(SBK_TYPE ${SBK_TYPES})
         POSITION_INDEPENDENT_CODE ON
         FOLDER "Generated Targets")
 
-    target_compile_options(opencl_sort_by_key_${SBK_TYPE} PRIVATE ${opencl_cxx_flags})
+    arrayfire_set_default_cxx_flags(opencl_sort_by_key_${SBK_TYPE})
+
     target_compile_definitions(opencl_sort_by_key_${SBK_TYPE}
       PRIVATE
+        ${opencl_compile_definitions}
         $<TARGET_PROPERTY:Boost::boost,INTERFACE_COMPILE_DEFINITIONS>
         TYPE=${SBK_TYPE} AFDLL)
     target_sources(opencl_sort_by_key

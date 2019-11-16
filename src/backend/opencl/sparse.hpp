@@ -7,11 +7,12 @@
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
 
+#pragma once
+
 #include <Array.hpp>
 #include <common/SparseArray.hpp>
 
-namespace opencl
-{
+namespace opencl {
 
 template<typename T, af_storage stype>
 common::SparseArray<T> sparseConvertDenseToStorage(const Array<T> &in);
@@ -19,7 +20,8 @@ common::SparseArray<T> sparseConvertDenseToStorage(const Array<T> &in);
 template<typename T, af_storage stype>
 Array<T> sparseConvertStorageToDense(const common::SparseArray<T> &in);
 
-template<typename T, af_storage src, af_storage dest>
-common::SparseArray<T> sparseConvertStorageToStorage(const common::SparseArray<T> &in);
+template<typename T, af_storage dest, af_storage src>
+common::SparseArray<T> sparseConvertStorageToStorage(
+    const common::SparseArray<T> &in);
 
-}
+}  // namespace opencl

@@ -37,11 +37,15 @@ target_sources(afcpu
     convolve.hpp
     copy.cpp
     copy.hpp
+    device_manager.cpp
+    device_manager.hpp
     diagonal.cpp
     diagonal.hpp
     diff.cpp
     diff.hpp
     err_cpu.hpp
+    Event.cpp
+    Event.hpp
     exampleFunction.cpp
     exampleFunction.hpp
     fast.cpp
@@ -54,6 +58,8 @@ target_sources(afcpu
     gradient.hpp
     harris.cpp
     harris.hpp
+    hist_graphics.cpp
+    hist_graphics.hpp
     histogram.cpp
     histogram.hpp
     homography.cpp
@@ -64,6 +70,8 @@ target_sources(afcpu
     identity.hpp
     iir.cpp
     iir.hpp
+    image.cpp
+    image.hpp
     index.cpp
     index.hpp
     inverse.cpp
@@ -101,8 +109,11 @@ target_sources(afcpu
     orb.cpp
     orb.hpp
     padarray.cpp
+    ParamIterator.hpp
     platform.cpp
     platform.hpp
+    plot.cpp
+    plot.hpp
     print.hpp
     qr.cpp
     qr.hpp
@@ -149,6 +160,8 @@ target_sources(afcpu
     sparse_arith.hpp
     sparse_blas.cpp
     sparse_blas.hpp
+    surface.cpp
+    surface.hpp
     susan.cpp
     susan.hpp
     svd.cpp
@@ -169,6 +182,8 @@ target_sources(afcpu
     unwrap.cpp
     unwrap.hpp
     utility.hpp
+    vector_field.cpp
+    vector_field.hpp
     where.cpp
     where.hpp
     wrap.cpp
@@ -191,7 +206,6 @@ target_sources(afcpu
     kernel/dot.hpp
     kernel/exampleFunction.hpp
     kernel/fast.hpp
-    kernel/fft.hpp
     kernel/fftconvolve.hpp
     kernel/gradient.hpp
     kernel/harris.hpp
@@ -213,6 +227,7 @@ target_sources(afcpu
     kernel/morph.hpp
     kernel/nearest_neighbour.hpp
     kernel/orb.hpp
+    kernel/pad_array_borders.hpp
     kernel/random_engine.hpp
     kernel/random_engine_mersenne.hpp
     kernel/random_engine_philox.hpp
@@ -249,36 +264,16 @@ endif(AF_WITH_CPUID)
 target_sources(afcpu
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/threads/async_queue.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/threads/event.hpp
   )
 
-if(MSVC)
-  target_compile_options(afcpu PRIVATE /bigobj)
-endif()
+arrayfire_set_default_cxx_flags(afcpu)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/kernel/sort_by_key/CMakeLists.txt")
 
 if(AF_WITH_NONFREE)
   target_sources(afcpu PRIVATE kernel/sift_nonfree.hpp)
   target_compile_definitions(afcpu PRIVATE AF_WITH_NONFREE_SIFT)
-endif()
-
-if(AF_WITH_GRAPHICS)
-  if(NOT AF_USE_SYSTEM_FORGE)
-    add_dependencies(afcpu forge-ext)
-  endif()
-  target_sources(afcpu
-    PRIVATE
-      hist_graphics.cpp
-      hist_graphics.hpp
-      image.cpp
-      image.hpp
-      plot.cpp
-      plot.hpp
-      surface.cpp
-      surface.hpp
-      vector_field.cpp
-      vector_field.hpp
-    )
 endif()
 
 target_include_directories(afcpu
@@ -321,7 +316,6 @@ if(USE_CPU_MKL)
       c_api_interface
       cpp_api_interface
       afcommon_interface
-      afcommon_lapack_interface
       cpu_sort_by_key
       MKL::MKL
       Threads::Threads
@@ -335,14 +329,26 @@ else()
       c_api_interface
       cpp_api_interface
       afcommon_interface
-      afcommon_lapack_interface
       cpu_sort_by_key
       ${CBLAS_LIBRARIES}
-      ${LAPACK_LIBRARIES}
       FFTW::FFTW
       FFTW::FFTWF
       Threads::Threads
     )
+  if(LAPACK_FOUND)
+    target_link_libraries(afcpu
+      PRIVATE
+        ${LAPACK_LIBRARIES})
+    target_include_directories(afcpu
+      PRIVATE
+        ${LAPACK_INCLUDE_DIR})
+  endif()
+endif()
+
+if(LAPACK_FOUND OR MKL_FOUND)
+  target_compile_definitions(afcpu
+    PRIVATE
+      WITH_LINEAR_ALGEBRA)
 endif()
 
 install(TARGETS afcpu

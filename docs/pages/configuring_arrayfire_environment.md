@@ -163,12 +163,14 @@ enable tracing of various modules within ArrayFire. This is a comma separated
 list of modules to trace. If enabled, ArrayFire will print relevant information
 to stdout. Currently the following modules are supported:
 
+- all: All trace outputs
 - mem: Memory management allocation, free and garbage collection information
+- unified: Unified backend dynamic loading information
 
 Tracing displays the information that could be useful when debugging or
 optimizing your application. Here is how you would use this variable:
 
-    AF_TRACE=mem ./myprogram
+    AF_TRACE=mem,unified ./myprogram
 
 This will print information about memory operations such as allocations,
 deallocations, and garbage collection.
@@ -210,3 +212,28 @@ When set, this environment variable specifies the maximum length of the CPU JIT
 tree after which evaluation is forced.
 
 The default value, as of v3.4, 100. This value was 20 for older versions.
+
+AF_BUILD_LIB_CUSTOM_PATH {#af_build_lib_custom_path}
+-------------------------------------------------------------------------------
+
+When set, this environment variable specifies a custom path along which the
+symbol manager will search for dynamic (shared library) backends to load. This 
+is useful for specialized build configurations that use the unified backend and
+build shared libraries separately.
+
+By default, no additional path will be searched for an empty value.
+
+
+AF_JIT_KERNEL_TRACE {#af_jit_kernel_trace}
+-------------------------------------------------------------------------------
+
+When set, this environment variable has to be set to one of the following
+three values:
+
+- stdout : generated kernels will be printed to standard output
+- stderr : generated kernels will be printed to standard error stream
+- absolute path to a folder on the disk where generated kernels will be stored
+
+CUDA backend kernels are stored in files with cu file extension.
+
+OpenCL backend kernels are stored in files with cl file extension.

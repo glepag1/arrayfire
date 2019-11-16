@@ -6,33 +6,32 @@
  * The complete license agreement can be obtained at:
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
+#include <iota.hpp>
+#include <kernel/iota.hpp>
 
 #include <Array.hpp>
-#include <iota.hpp>
+#include <common/half.hpp>
 #include <math.hpp>
 #include <platform.hpp>
 #include <queue.hpp>
-#include <kernel/iota.hpp>
 
-using namespace std;
+using common::half;
 
-namespace cpu
-{
+namespace cpu {
 
 template<typename T>
-Array<T> iota(const dim4 &dims, const dim4 &tile_dims)
-{
+Array<T> iota(const dim4 &dims, const dim4 &tile_dims) {
     dim4 outdims = dims * tile_dims;
 
     Array<T> out = createEmptyArray<T>(outdims);
 
-    getQueue().enqueue(kernel::iota<T>, out, dims, tile_dims);
+    getQueue().enqueue(kernel::iota<T>, out, dims);
 
     return out;
 }
 
-#define INSTANTIATE(T)                                                          \
-    template Array<T> iota<T>(const af::dim4 &dims, const af::dim4 &tile_dims); \
+#define INSTANTIATE(T) \
+    template Array<T> iota<T>(const af::dim4 &dims, const af::dim4 &tile_dims);
 
 INSTANTIATE(float)
 INSTANTIATE(double)
@@ -43,5 +42,6 @@ INSTANTIATE(uintl)
 INSTANTIATE(uchar)
 INSTANTIATE(short)
 INSTANTIATE(ushort)
+INSTANTIATE(half)
 
-}
+}  // namespace cpu

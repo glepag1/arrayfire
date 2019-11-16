@@ -75,7 +75,7 @@ typedef enum {
     af_ceil_t,
     af_round_t,
     af_trunc_t,
-    af_sign_t,
+    af_signbit_t,
 
     af_rem_t,
     af_mod_t,
@@ -95,4 +95,5 @@ typedef enum {
 
     af_select_t,
     af_not_select_t,
+    af_rsqrt_t
 } af_op_t;

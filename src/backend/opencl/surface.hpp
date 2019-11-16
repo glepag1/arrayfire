@@ -7,17 +7,12 @@
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
 
-#if defined (WITH_GRAPHICS)
-
 #include <Array.hpp>
 #include <common/graphics_common.hpp>
 
-namespace opencl
-{
-    template<typename T>
-    void copy_surface(const Array<T> &P, forge::Surface* surface);
+namespace opencl {
+
+template<typename T>
+void copy_surface(const Array<T> &P, fg_surface surface);
+
 }
-
-#endif
-
-

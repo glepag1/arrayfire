@@ -7,17 +7,10 @@
 
 include(InternalUtils)
 
-set(AF_OPENCL_BLAS_LIBRARY clBLAS CACHE STRING "Select OpenCL BLAS back-end")
+set(AF_OPENCL_BLAS_LIBRARY CLBlast CACHE STRING "Select OpenCL BLAS back-end")
 set_property(CACHE AF_OPENCL_BLAS_LIBRARY PROPERTY STRINGS "clBLAS" "CLBlast")
 
 af_deprecate(OPENCL_BLAS_LIBRARY AF_OPENCL_BLAS_LIBRARY)
-
-include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag(-Wno-ignored-attributes has_ignored_attributes_flag)
-
-if(has_ignored_attributes_flag)
-  set(opencl_cxx_flags -Wno-ignored-attributes)
-endif()
 
 include(build_clFFT)
 
@@ -26,9 +19,9 @@ file(GLOB kernel_src kernel/*.cl kernel/KParam.hpp)
 set( kernel_headers_dir
     "kernel_headers")
 
-include(CLKernelToH)
+include(FileToString)
 
-cl_kernel_to_h(
+file_to_string(
     SOURCES ${kernel_src}
     VARNAME kernel_files
     EXTENSION "hpp"
@@ -36,6 +29,13 @@ cl_kernel_to_h(
     TARGETS cl_kernel_targets
     NAMESPACE "opencl"
     )
+
+set(opencl_compile_definitions
+        CL_TARGET_OPENCL_VERSION=120
+        CL_HPP_TARGET_OPENCL_VERSION=120
+        CL_HPP_MINIMUM_OPENCL_VERSION=120
+        CL_HPP_ENABLE_EXCEPTIONS
+        CL_USE_DEPRECATED_OPENCL_1_2_APIS)
 
 include(kernel/scan_by_key/CMakeLists.txt)
 include(kernel/sort_by_key/CMakeLists.txt)
@@ -81,6 +81,8 @@ target_sources(afopencl
     copy.hpp
     count.cpp
     debug_opencl.hpp
+    device_manager.cpp
+    device_manager.hpp
     diagonal.cpp
     diagonal.hpp
     diff.cpp
@@ -94,6 +96,8 @@ target_sources(afopencl
     err_opencl.hpp
     errorcodes.cpp
     errorcodes.hpp
+    Event.hpp
+    Event.cpp
     exampleFunction.cpp
     exampleFunction.hpp
     fast.cpp
@@ -102,10 +106,14 @@ target_sources(afopencl
     fft.hpp
     fftconvolve.cpp
     fftconvolve.hpp
+    GraphicsResourceManager.cpp
+    GraphicsResourceManager.hpp
     gradient.cpp
     gradient.hpp
     harris.cpp
     harris.hpp
+    hist_graphics.cpp
+    hist_graphics.hpp
     histogram.cpp
     histogram.hpp
     homography.cpp
@@ -116,6 +124,8 @@ target_sources(afopencl
     identity.hpp
     iir.cpp
     iir.hpp
+    image.cpp
+    image.hpp
     index.cpp
     index.hpp
     inverse.cpp
@@ -157,6 +167,8 @@ target_sources(afopencl
     orb.hpp
     platform.cpp
     platform.hpp
+    plot.cpp
+    plot.hpp
     print.hpp
     product.cpp
     program.cpp
@@ -207,6 +219,8 @@ target_sources(afopencl
     sparse_blas.cpp
     sparse_blas.hpp
     sum.cpp
+    surface.cpp
+    surface.hpp
     susan.cpp
     susan.hpp
     svd.cpp
@@ -223,11 +237,13 @@ target_sources(afopencl
     transpose_inplace.cpp
     triangle.cpp
     triangle.hpp
-    types.cpp
     types.hpp
+    types.cpp
     unary.hpp
     unwrap.cpp
     unwrap.hpp
+    vector_field.cpp
+    vector_field.hpp
     where.cpp
     where.hpp
     wrap.cpp
@@ -284,6 +300,7 @@ target_sources(afopencl
     kernel/names.hpp
     kernel/nearest_neighbour.hpp
     kernel/orb.hpp
+    kernel/pad_array_borders.hpp
     kernel/random_engine.hpp
     kernel/range.hpp
     kernel/reduce.hpp
@@ -336,11 +353,8 @@ target_sources(afopencl
 
 target_sources(afopencl
   PRIVATE
-    JIT/BinaryNode.hpp
-    JIT/BufferNode.hpp
-    JIT/Node.hpp
-    JIT/ScalarNode.hpp
-    JIT/UnaryNode.hpp
+    jit/BufferNode.hpp
+    jit/kernel_generators.hpp
   )
 
 target_sources(afopencl
@@ -383,18 +397,18 @@ target_include_directories(afopencl
     ../../../include
   )
 
+arrayfire_set_default_cxx_flags(afopencl)
+
 add_dependencies(afopencl ${cl_kernel_targets})
 add_dependencies(opencl_scan_by_key ${cl_kernel_targets} cl2hpp Boost::boost)
 add_dependencies(opencl_sort_by_key ${cl_kernel_targets} cl2hpp Boost::boost)
 
 set_target_properties(afopencl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_compile_options(afopencl PRIVATE ${opencl_cxx_flags})
-
 target_compile_definitions(afopencl
   PRIVATE
-    CL_USE_DEPRECATED_OPENCL_1_2_APIS
-    __CL_ENABLE_EXCEPTIONS
+    ${opencl_compile_definitions}
+    AF_OPENCL
   )
 
 target_link_libraries(afopencl
@@ -432,28 +446,12 @@ if(AF_WITH_NONFREE)
   target_compile_definitions(afopencl PRIVATE AF_WITH_NONFREE_SIFT)
 endif()
 
-if(AF_WITH_GRAPHICS)
-  if(NOT AF_USE_SYSTEM_FORGE)
-    add_dependencies(afopencl forge-ext)
-  endif()
-  target_sources(afopencl
-    PRIVATE
-      GraphicsResourceManager.hpp
-      GraphicsResourceManager.cpp
-      hist_graphics.cpp
-      hist_graphics.hpp
-      image.cpp
-      image.hpp
-      plot.cpp
-      plot.hpp
-      surface.cpp
-      surface.hpp
-      vector_field.cpp
-      vector_field.hpp
-    )
+if(APPLE)
+  target_link_libraries(afopencl
+    PRIVATE OpenGL::GL)
 endif()
 
-if(LAPACK_FOUND)
+if(LAPACK_FOUND OR MKL_FOUND)
   target_sources(afopencl
     PRIVATE
       magma/gebrd.cpp
@@ -485,8 +483,7 @@ if(LAPACK_FOUND)
       magma/ungqr.cpp
       magma/unmqr.cpp
       #magma/unmqr2.cpp
-
-    )
+      )
 
   if(USE_OPENCL_MKL)
     dependency_check(MKL_FOUND "MKL not found")
@@ -494,9 +491,7 @@ if(LAPACK_FOUND)
 
     target_link_libraries(afopencl
       PRIVATE
-        MKL::MKL
-      )
-
+        MKL::MKL)
   else()
     dependency_check(OpenCL_FOUND "OpenCL not found.")
 
@@ -507,7 +502,8 @@ if(LAPACK_FOUND)
     dependency_check(CBLAS_LIBRARIES "CBLAS not found.")
     target_include_directories(afopencl
       PRIVATE
-        ${CBLAS_INCLUDE_DIR})
+        ${CBLAS_INCLUDE_DIR}
+        ${LAPACK_INCLUDE_DIR})
     target_link_libraries(afopencl
       PRIVATE
         ${CBLAS_LIBRARIES}
@@ -517,13 +513,8 @@ if(LAPACK_FOUND)
   target_compile_definitions(
     afopencl
     PRIVATE
-      WITH_OPENCL_LINEAR_ALGEBRA
-    )
-
-  target_link_libraries(afopencl
-    PRIVATE
-      afcommon_lapack_interface)
-endif(LAPACK_FOUND)
+      WITH_LINEAR_ALGEBRA)
+endif(LAPACK_FOUND OR MKL_FOUND)
 
 install(TARGETS afopencl
   EXPORT ArrayFireOpenCLTargets
@@ -540,7 +531,7 @@ if(NOT APPLE AND AF_INSTALL_STANDALONE)
   if(UNIX)
     get_filename_component(opencl_outpath "${OpenCL_LIBRARIES}" REALPATH)
     install(FILES ${opencl_outpath}
-        DESTINATION ${AF_INSTALL_BIN_DIR}
+        DESTINATION ${AF_INSTALL_LIB_DIR}
         RENAME "${CMAKE_SHARED_LIBRARY_PREFIX}OpenCL${CMAKE_SHARED_LIBRARY_SUFFIX}.1"
         COMPONENT opencl_dependencies)
   else()

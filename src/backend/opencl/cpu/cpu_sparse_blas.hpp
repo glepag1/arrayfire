@@ -15,21 +15,19 @@
 #endif
 
 #ifdef USE_MKL
-typedef MKL_Complex8    sp_cfloat;
-typedef MKL_Complex16   sp_cdouble;
+using sp_cfloat  = MKL_Complex8;
+using sp_cdouble = MKL_Complex16;
 #else
-typedef opencl::cfloat  sp_cfloat;
-typedef opencl::cdouble sp_cdouble;
+using sp_cfloat  = opencl::cfloat;
+using sp_cdouble = opencl::cdouble;
 #endif
 
-namespace opencl
-{
-namespace cpu
-{
+namespace opencl {
+namespace cpu {
 
 template<typename T>
 Array<T> matmul(const common::SparseArray<T> lhs, const Array<T> rhs,
                 af_mat_prop optLhs, af_mat_prop optRhs);
 
 }
-}
+}  // namespace opencl

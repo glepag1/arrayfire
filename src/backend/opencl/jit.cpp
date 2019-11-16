@@ -7,42 +7,42 @@
  * http://arrayfire.com/licenses/BSD-3-Clause
  ********************************************************/
 
-#include <af/dim4.hpp>
 #include <Array.hpp>
-#include <map>
-#include <vector>
-#include <stdexcept>
+#include <common/dispatch.hpp>
+#include <common/jit/Node.hpp>
 #include <copy.hpp>
-#include <JIT/Node.hpp>
+#include <err_opencl.hpp>
 #include <kernel_headers/jit.hpp>
 #include <program.hpp>
-#include <common/dispatch.hpp>
-#include <err_opencl.hpp>
-#include <functional>
+#include <af/dim4.hpp>
 #include <af/opencl.h>
 
-namespace opencl
-{
+#include <functional>
+#include <stdexcept>
+#include <vector>
 
-using JIT::Node;
-using JIT::Node_ids;
-using JIT::Node_map_t;
+using common::Node;
+using common::Node_ids;
+using common::Node_map_t;
 
 using cl::Buffer;
-using cl::Program;
+using cl::EnqueueArgs;
 using cl::Kernel;
 using cl::KernelFunctor;
-using cl::EnqueueArgs;
 using cl::NDRange;
+using cl::NullRange;
+using cl::Program;
+
+using std::hash;
 using std::string;
 using std::stringstream;
 using std::vector;
 
+namespace opencl {
+
 static string getFuncName(const vector<Node *> &output_nodes,
-                          const vector<Node *> &full_nodes,
-                          const vector<Node_ids> &full_ids,
-                          bool is_linear, bool *is_double)
-{
+                          const vector<const Node *> &full_nodes,
+                          const vector<Node_ids> &full_ids, bool is_linear) {
     stringstream hashName;
     stringstream funcName;
 
@@ -52,38 +52,29 @@ static string getFuncName(const vector<Node *> &output_nodes,
         funcName << "G_";
     }
 
-    for (auto node :  output_nodes) {
-        funcName << node->getNameStr() << "_";
-    }
+    for (auto node : output_nodes) { funcName << node->getNameStr() << "_"; }
 
     for (int i = 0; i < (int)full_nodes.size(); i++) {
         full_nodes[i]->genKerName(funcName, full_ids[i]);
     }
 
-    string nameStr = funcName.str();
-    string dblChars = "dDzZ";
-    size_t loc = nameStr.find_first_of(dblChars);
-    *is_double = (loc != std::string::npos);
-
-    std::hash<std::string> hash_fn;
+    hash<string> hash_fn;
     hashName << "KER" << hash_fn(funcName.str());
     return hashName.str();
 }
 
 static string getKernelString(const string funcName,
-                              const vector<Node *> &full_nodes,
+                              const vector<const Node *> &full_nodes,
                               const vector<Node_ids> &full_ids,
-                              const vector<int> &output_ids,
-                              bool is_linear)
-{
-
+                              const vector<int> &output_ids, bool is_linear) {
     // Common OpenCL code
     // This part of the code does not change with the kernel.
 
     static const char *kernelVoid = "__kernel void\n";
-    static const char *dimParams = "KParam oInfo, uint groups_0, uint groups_1, uint num_odims";
+    static const char *dimParams =
+        "KParam oInfo, uint groups_0, uint groups_1, uint num_odims";
     static const char *blockStart = "{\n\n";
-    static const char *blockEnd = "\n\n}";
+    static const char *blockEnd   = "\n\n}";
 
     static const char *linearIndex = R"JIT(
         uint groupId  = get_group_id(1) * get_num_groups(0) + get_group_id(0);
@@ -129,7 +120,7 @@ static string getKernelString(const string funcName,
     stringstream opsStream;
 
     for (int i = 0; i < (int)full_nodes.size(); i++) {
-        const auto &node = full_nodes[i];
+        const auto &node     = full_nodes[i];
         const auto &ids_curr = full_ids[i];
         // Generate input parameters, only needs current id
         node->genParams(inParamStream, ids_curr.id, is_linear);
@@ -142,7 +133,8 @@ static string getKernelString(const string funcName,
     for (int i = 0; i < (int)output_ids.size(); i++) {
         int id = output_ids[i];
         // Generate output parameters
-        outParamStream << "__global " << full_nodes[id]->getTypeStr() << " *out" << id << ", \n";
+        outParamStream << "__global " << full_nodes[id]->getTypeStr() << " *out"
+                       << id << ", \n";
         // Generate code to write the output
         outWriteStream << "out" << id << "[idx] = val" << id << ";\n";
     }
@@ -172,27 +164,31 @@ static string getKernelString(const string funcName,
 
 static Kernel getKernel(const vector<Node *> &output_nodes,
                         const vector<int> &output_ids,
-                        const vector<Node *> &full_nodes,
+                        const vector<const Node *> &full_nodes,
                         const vector<Node_ids> &full_ids,
-                        const bool is_linear)
-{
-    bool is_dbl = false;
-    string funcName = getFuncName(output_nodes, full_nodes, full_ids, is_linear, &is_dbl);
+                        const bool is_linear) {
+    string funcName =
+        getFuncName(output_nodes, full_nodes, full_ids, is_linear);
     int device = getActiveDeviceId();
 
     kc_entry_t entry = kernelCache(device, funcName);
 
-    if (entry.prog==0 && entry.ker==0) {
-        string jit_ker = getKernelString(funcName, full_nodes, full_ids, output_ids, is_linear);
-
+    if (entry.prog == 0 && entry.ker == 0) {
+        string jit_ker = getKernelString(funcName, full_nodes, full_ids,
+                                         output_ids, is_linear);
+        saveKernel(funcName, jit_ker, ".cl");
         const char *ker_strs[] = {jit_cl, jit_ker.c_str()};
-        const int ker_lens[] = {jit_cl_len, (int)jit_ker.size()};
+        const int ker_lens[]   = {jit_cl_len, (int)jit_ker.size()};
 
-        cl::Program prog;
-        buildProgram(prog, 2, ker_strs, ker_lens, is_dbl ? string(" -D USE_DOUBLE") :  string(""));
+        Program prog;
+        buildProgram(
+            prog, 2, ker_strs, ker_lens,
+            (isDoubleSupported(device) ? string(" -D USE_DOUBLE") : string("")) +
+            (isHalfSupported(device) ? string(" -D USE_HALF") : string(""))
+                     );
 
-        entry.prog = new cl::Program(prog);
-        entry.ker = new Kernel(*entry.prog, funcName.c_str());
+        entry.prog = new Program(prog);
+        entry.ker  = new Kernel(*entry.prog, funcName.c_str());
 
         addKernelToCache(device, funcName, entry);
     }
@@ -200,17 +196,16 @@ static Kernel getKernel(const vector<Node *> &output_nodes,
     return *entry.ker;
 }
 
-void evalNodes(vector<Param> &outputs, vector<Node *> output_nodes)
-{
+void evalNodes(vector<Param> &outputs, vector<Node *> output_nodes) {
     if (outputs.size() == 0) return;
 
     // Assume all ouputs are of same size
-    //FIXME: Add assert to check if all outputs are same size?
+    // FIXME: Add assert to check if all outputs are same size?
     KParam out_info = outputs[0].info;
 
     // Use thread local to reuse the memory every time you are here.
     thread_local Node_map_t nodes;
-    thread_local vector<Node *> full_nodes;
+    thread_local vector<const Node *> full_nodes;
     thread_local vector<Node_ids> full_ids;
     thread_local vector<int> output_ids;
 
@@ -232,36 +227,38 @@ void evalNodes(vector<Param> &outputs, vector<Node *> output_nodes)
         is_linear &= node->isLinear(outputs[0].info.dims);
     }
 
-    Kernel ker = getKernel(output_nodes, output_ids,
-                           full_nodes, full_ids,
-                           is_linear);
+    Kernel ker =
+        getKernel(output_nodes, output_ids, full_nodes, full_ids, is_linear);
 
-    uint local_0 = 1;
-    uint local_1 = 1;
-    uint global_0 = 1;
-    uint global_1 = 1;
-    uint groups_0 = 1;
-    uint groups_1 = 1;
+    uint local_0   = 1;
+    uint local_1   = 1;
+    uint global_0  = 1;
+    uint global_1  = 1;
+    uint groups_0  = 1;
+    uint groups_1  = 1;
     uint num_odims = 4;
 
     // CPUs seem to perform better with work group size 1024
-    const int work_group_size = (getActiveDeviceType() == AFCL_DEVICE_TYPE_CPU) ? 1024 : 256;
+    const int work_group_size =
+        (getActiveDeviceType() == AFCL_DEVICE_TYPE_CPU) ? 1024 : 256;
 
     while (num_odims >= 1) {
-        if (out_info.dims[num_odims - 1] == 1) num_odims--;
-        else break;
+        if (out_info.dims[num_odims - 1] == 1)
+            num_odims--;
+        else
+            break;
     }
 
     if (is_linear) {
-        local_0 = work_group_size;
+        local_0           = work_group_size;
         uint out_elements = out_info.dims[3] * out_info.strides[3];
-        uint groups = divup(out_elements, local_0);
+        uint groups       = divup(out_elements, local_0);
 
-        global_1 = divup(groups,     1000) * local_1;
+        global_1 = divup(groups, 1000) * local_1;
         global_0 = divup(groups, global_1) * local_0;
 
     } else {
-        local_1 =  4;
+        local_1 = 4;
         local_0 = work_group_size / local_1;
 
         groups_0 = divup(out_info.dims[0], local_0);
@@ -276,7 +273,10 @@ void evalNodes(vector<Param> &outputs, vector<Node *> output_nodes)
 
     int nargs = 0;
     for (const auto &node : full_nodes) {
-        nargs = node->setArgs(ker, nargs, is_linear);
+        nargs = node->setArgs(nargs, is_linear,
+                              [&](int id, const void *ptr, size_t arg_size) {
+                                  ker.setArg(id, arg_size, ptr);
+                              });
     }
 
     // Set output parameters
@@ -288,12 +288,12 @@ void evalNodes(vector<Param> &outputs, vector<Node *> output_nodes)
     // Set dimensions
     // All outputs are asserted to be of same size
     // Just use the size from the first output
-    ker.setArg(nargs + 0,  out_info);
-    ker.setArg(nargs + 1,  groups_0);
-    ker.setArg(nargs + 2,  groups_1);
-    ker.setArg(nargs + 3,  num_odims);
+    ker.setArg(nargs + 0, out_info);
+    ker.setArg(nargs + 1, groups_0);
+    ker.setArg(nargs + 2, groups_1);
+    ker.setArg(nargs + 3, num_odims);
 
-    getQueue().enqueueNDRangeKernel(ker, cl::NullRange, global, local);
+    getQueue().enqueueNDRangeKernel(ker, NullRange, global, local);
 
     // Reset the thread local vectors
     nodes.clear();
@@ -302,11 +302,10 @@ void evalNodes(vector<Param> &outputs, vector<Node *> output_nodes)
     full_ids.clear();
 }
 
-void evalNodes(Param &out, Node *node)
-{
-    vector<Param>  outputs{out};
+void evalNodes(Param &out, Node *node) {
+    vector<Param> outputs{out};
     vector<Node *> nodes{node};
     return evalNodes(outputs, nodes);
 }
 
-}
+}  // namespace opencl

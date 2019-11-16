@@ -10,6 +10,14 @@ include(select_compute_arch)
 
 dependency_check(CUDA_FOUND "CUDA not found.")
 
+find_cuda_helper_libs(nvrtc)
+find_cuda_helper_libs(nvrtc-builtins)
+find_cuda_helper_libs(cudnn)
+
+get_filename_component(CUDA_LIBRARIES_PATH ${CUDA_cudart_static_LIBRARY} DIRECTORY CACHE)
+
+include(FileToString)
+
 if(NOT CUDA_architecture_build_targets)
   cuda_detect_installed_gpus(detected_gpus)
 endif()
@@ -18,28 +26,17 @@ set(CUDA_architecture_build_targets ${detected_gpus} CACHE
   STRING "The compute architectures targeted by this build. (Options: 3.0;Maxwell;All;Common)")
 
 cuda_select_nvcc_arch_flags(cuda_architecture_flags ${CUDA_architecture_build_targets})
-message(STATUS "CUDA Architectures: ${CUDA_architecture_build_targets}")
-
-find_cuda_helper_libs(nvrtc)
-find_cuda_helper_libs(nvrtc-builtins)
-
-get_filename_component(CUDA_LIBRARIES_PATH ${CUDA_cudart_static_LIBRARY} DIRECTORY CACHE)
-mark_as_advanced(
-    CUDA_LIBRARIES_PATH
-    CUDA_architecture_build_targets)
-
-# TODO(umar): Move these flags to a separate function/target
-if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "5.3.0")
-  if(${CUDA_VERSION_MAJOR} LESS 8)
-    add_definitions(-D_FORCE_INLINES -D_MWAITXINTRIN_H_INCLUDED)
-  endif()
-endif()
-
-include(CLKernelToH)
+message(STATUS "CUDA_architecture_build_targets: ${CUDA_architecture_build_targets}")
 
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
   ${cuda_architecture_flags}
   )
+
+mark_as_advanced(
+    CUDA_LIBRARIES_PATH
+    CUDA_architecture_build_targets)
+
+get_target_property(COMMON_INTERFACE_DIRS afcommon_interface INTERFACE_INCLUDE_DIRECTORIES)
 
 cuda_include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -47,27 +44,87 @@ cuda_include_directories(
   ${ArrayFire_SOURCE_DIR}/include
   ${ArrayFire_BINARY_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/kernel
-  ${CMAKE_CURRENT_SOURCE_DIR}/JIT
+  ${CMAKE_CURRENT_SOURCE_DIR}/jit
   ${CMAKE_CURRENT_SOURCE_DIR}/cub
   ${ArrayFire_SOURCE_DIR}/src/api/c
   ${ArrayFire_SOURCE_DIR}/src/backend
 
-  # NOTE: Space after comma is necessary
-  $<JOIN:$<TARGET_PROPERTY:afcommon_interface,INTERFACE_INCLUDE_DIRECTORIES>, >
+  ${COMMON_INTERFACE_DIRS}
   )
-
-set(jit_kernel_headers
-    "kernel_headers")
 
 file(GLOB jit_src "kernel/jit.cuh")
 
-cl_kernel_to_h(
+file_to_string(
     SOURCES ${jit_src}
     VARNAME jit_files
     EXTENSION "hpp"
-    OUTPUT_DIR ${jit_kernel_headers}
+    OUTPUT_DIR "kernel_headers"
     TARGETS jit_kernel_targets
     NAMESPACE "cuda"
+    WITH_EXTENSION
+    )
+
+set(nvrtc_src
+  ${CUDA_INCLUDE_DIRS}/cuda_fp16.h
+  ${CUDA_INCLUDE_DIRS}/cuda_fp16.hpp
+  ${CUDA_TOOLKIT_ROOT_DIR}/include/cuComplex.h
+  ${CUDA_TOOLKIT_ROOT_DIR}/include/math_constants.h
+
+  ${PROJECT_SOURCE_DIR}/src/api/c/ops.hpp
+  ${PROJECT_SOURCE_DIR}/src/api/c/optypes.hpp
+  ${PROJECT_SOURCE_DIR}/include/af/defines.h
+  ${PROJECT_SOURCE_DIR}/include/af/traits.hpp
+  ${PROJECT_BINARY_DIR}/include/af/version.h
+
+  ${CMAKE_CURRENT_SOURCE_DIR}/Param.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/backend.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/interp.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/shared.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/math.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/types.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../common/half.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../common/kernel_type.hpp
+
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/anisotropic_diffusion.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/approx1.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/approx2.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/bilateral.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/canny.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/convolve1.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/convolve2.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/convolve3.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/convolve_separable.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/exampleFunction.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/histogram.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/hsv_rgb.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/match_template.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/meanshift.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/medfilt.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/moments.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/morph.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/pad_array_borders.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/resize.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/rotate.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/scan_dim.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/scan_dim_by_key.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/scan_first.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/scan_first_by_key.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/sobel.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/transform.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/transpose.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/transpose_inplace.cuh
+  ${CMAKE_CURRENT_SOURCE_DIR}/kernel/where.cuh
+  )
+
+file_to_string(
+    SOURCES ${nvrtc_src}
+    VARNAME nvrtc_files
+    EXTENSION "hpp"
+    OUTPUT_DIR "nvrtc_kernel_headers"
+    TARGETS nvrtc_kernel_targets
+    NAMESPACE "cuda"
+    WITH_EXTENSION
+    NULLTERM
     )
 
 ## Copied from FindCUDA.cmake
@@ -114,48 +171,55 @@ function(cuda_add_library cuda_target)
 endfunction()
 
 arrayfire_get_cuda_cxx_flags(cuda_cxx_flags)
-if(NOT MSVC)
-  set(cuda_cxx_flags "${cuda_cxx_flags} -Xcompiler -fPIC  -Xcompiler=${CMAKE_CXX_COMPILE_OPTIONS_VISIBILITY}hidden")
+arrayfire_get_platform_definitions(platform_flags)
+
+# This definition is required in addition to the definition below because in
+# an older verion of cmake definitions added using target_compile_definitions
+# were not added to the nvcc flags. This manually adds these definitions and
+# pass them to the options parameter in cuda_add_library
+if(AF_WITH_NONFREE)
+  set(cxx_definitions -DAF_WITH_NONFREE_SIFT)
 endif()
 
-if(AF_WITH_NONFREE AND CMAKE_VERSION VERSION_LESS "3.7")
-  # This definition is required in addition to the definition below because in
-  # an older verion of cmake definitions added using target_compile_definitions
-  # were not added to the nvcc flags. This manually adds these definitions and
-  # pass them to the options parameter in cuda_add_library
-  string(APPEND cuda_cxx_flags " -DAF_WITH_NONFREE_SIFT")
-endif()
+# CUDA_NO_HALF prevents the inclusion of the half class in the global namespace
+# which conflicts with the half class in ArrayFire's common namespace. prefer
+# using __half class instead for CUDA
+list(APPEND cxx_definitions -DAF_CUDA;-DCUDA_NO_HALF)
+list(APPEND cuda_cxx_flags ${cxx_definitions})
 
 include(kernel/scan_by_key/CMakeLists.txt)
 include(kernel/thrust_sort_by_key/CMakeLists.txt)
 
 cuda_add_library(afcuda
-    scan.cu
+    sort.hpp
+
     all.cu
-    anisotropic_diffusion.cu
+    anisotropic_diffusion.cpp
     any.cu
-    approx.cu
+    approx.cpp
     assign.cu
-    bilateral.cu
-    canny.cu
+    bilateral.cpp
+    canny.cpp
     cholesky.cu
     copy.cu
     count.cu
     diagonal.cu
     diff.cu
-    dilate.cu
-    dilate3d.cu
-    erode.cu
-    erode3d.cu
-    exampleFunction.cu
+    dilate.cpp
+    dilate3d.cpp
+    erode.cpp
+    erode3d.cpp
+    Event.cpp
+    Event.hpp
+    exampleFunction.cpp
     fast.cu
     fast_pyramid.cu
     fftconvolve.cu
     gradient.cu
     harris.cu
-    histogram.cu
+    histogram.cpp
     homography.cu
-    hsv_rgb.cu
+    hsv_rgb.cpp
     identity.cu
     iir.cu
     index.cu
@@ -165,28 +229,28 @@ cuda_add_library(afcuda
     join.cu
     lookup.cu
     lu.cu
-    match_template.cu
+    match_template.cpp
     max.cu
     mean.cu
-    meanshift.cu
-    medfilt.cu
+    meanshift.cpp
+    medfilt.cpp
     min.cu
-    moments.cu
+    moments.cpp
     nearest_neighbour.cu
     orb.cu
+    pad_array_borders.cpp
     product.cu
     qr.cu
     random_engine.cu
     range.cu
     regions.cu
     reorder.cu
-    resize.cu
-    rotate.cu
-    scan_by_key.cu
+    resize.cpp
+    rotate.cpp
     select.cu
     set.cu
     sift.cu
-    sobel.cu
+    sobel.cpp
     solve.cu
     sort.cu
     sort_by_key.cu
@@ -198,16 +262,12 @@ cuda_add_library(afcuda
     svd.cu
     tile.cu
     topk.cu
-    transform.cu
-    transpose.cu
-    transpose_inplace.cu
+    transform.cpp
+    transpose.cpp
+    transpose_inplace.cpp
     triangle.cu
     unwrap.cu
-    where.cu
     wrap.cu
-
-    kernel/convolve.cu
-    kernel/convolve_separable.cu
 
     kernel/anisotropic_diffusion.hpp
     kernel/approx.hpp
@@ -217,6 +277,7 @@ cuda_add_library(afcuda
     kernel/canny.hpp
     kernel/config.hpp
     kernel/convolve.hpp
+    kernel/convolve_separable.cpp
     kernel/diagonal.hpp
     kernel/diff.hpp
     kernel/exampleFunction.hpp
@@ -248,6 +309,7 @@ cuda_add_library(afcuda
     kernel/nearest_neighbour.hpp
     kernel/orb.hpp
     kernel/orb_patch.hpp
+    kernel/pad_array_borders.hpp
     kernel/random_engine.hpp
     kernel/random_engine_mersenne.hpp
     kernel/random_engine_philox.hpp
@@ -306,13 +368,18 @@ cuda_add_library(afcuda
     copy.hpp
     cublas.cpp
     cublas.hpp
+    cudnn.cpp
+    cudnn.hpp
     cufft.cpp
     cufft.hpp
     cusolverDn.cpp
     cusolverDn.hpp
     cusparse.cpp
     cusparse.hpp
+    device_manager.cpp
+    device_manager.hpp
     debug_cuda.hpp
+    debug_thrust.hpp
     diagonal.hpp
     diff.hpp
     driver.cpp
@@ -323,13 +390,20 @@ cuda_add_library(afcuda
     fft.cpp
     fft.hpp
     fftconvolve.hpp
+    GraphicsResourceManager.cpp
+    GraphicsResourceManager.hpp
     gradient.hpp
+    handle.cpp
     harris.hpp
+    hist_graphics.cpp
+    hist_graphics.hpp
     histogram.hpp
     homography.hpp
     hsv_rgb.hpp
     identity.hpp
     iir.hpp
+    image.cpp
+    image.hpp
     index.hpp
     inverse.hpp
     iota.hpp
@@ -340,7 +414,6 @@ cuda_add_library(afcuda
     lookup.hpp
     lu.hpp
     match_template.hpp
-    math.cpp
     math.hpp
     mean.hpp
     meanshift.hpp
@@ -355,6 +428,8 @@ cuda_add_library(afcuda
     orb.hpp
     platform.cpp
     platform.hpp
+    plot.cpp
+    plot.hpp
     print.hpp
     qr.hpp
     random_engine.hpp
@@ -366,7 +441,9 @@ cuda_add_library(afcuda
     resize.hpp
     rotate.hpp
     scalar.hpp
+    scan.cpp
     scan.hpp
+    scan_by_key.cpp
     scan_by_key.hpp
     select.hpp
     set.hpp
@@ -375,13 +452,14 @@ cuda_add_library(afcuda
     sift.hpp
     sobel.hpp
     solve.hpp
-    sort.hpp
     sort_by_key.hpp
     sort_index.hpp
     sparse.hpp
     sparse_arith.hpp
     sparse_blas.cpp
     sparse_blas.hpp
+    surface.cpp
+    surface.hpp
     susan.hpp
     svd.hpp
     tile.hpp
@@ -390,53 +468,37 @@ cuda_add_library(afcuda
     transform.hpp
     transpose.hpp
     triangle.hpp
-    types.cpp
     types.hpp
     unary.hpp
     unwrap.hpp
+    utility.cpp
     utility.hpp
+    vector_field.cpp
+    vector_field.hpp
+    where.cpp
     where.hpp
     wrap.hpp
 
-    JIT/BinaryNode.hpp
-    JIT/BufferNode.hpp
-    JIT/Node.hpp
-    JIT/ScalarNode.hpp
-    JIT/UnaryNode.hpp
-    JIT/NaryNode.hpp
-    JIT/ShiftNode.hpp
-    JIT/types.h
+    jit/BufferNode.hpp
+    jit/kernel_generators.hpp
 
-    OPTIONS "${cuda_cxx_flags} -Xcudafe \"--diag_suppress=1427\""
+    nvrtc/cache.cpp
+
+    OPTIONS ${platform_flags} ${cuda_cxx_flags} -Xcudafe \"--diag_suppress=1427\"
   )
+
+arrayfire_set_default_cxx_flags(afcuda)
+
+# NOTE: Do not add additional CUDA specific definitions here. Add it to the
+# cxx_definitions variable above. cxx_definitions is used to propigate
+# definitions to the scan_by_key and thrust_sort_by_key targets as well as the
+# cuda library above.
+target_compile_options(afcuda PRIVATE ${cxx_definitions})
 
 add_library(ArrayFire::afcuda ALIAS afcuda)
 
-if(AF_WITH_NONFREE)
-  target_compile_definitions(afcuda PRIVATE AF_WITH_NONFREE_SIFT)
-endif()
-
-if(AF_WITH_GRAPHICS)
-  if(NOT AF_USE_SYSTEM_FORGE)
-    add_dependencies(afcuda forge-ext)
-  endif()
-  target_sources(afcuda
-    PRIVATE
-      GraphicsResourceManager.cpp
-      GraphicsResourceManager.hpp
-      hist_graphics.cpp
-      hist_graphics.hpp
-      image.cpp
-      image.hpp
-      plot.cpp
-      plot.hpp
-      surface.cpp
-      surface.hpp
-      vector_field.cpp
-      vector_field.hpp)
-endif()
-
-add_dependencies(afcuda ${jit_kernel_targets})
+add_dependencies(afcuda ${jit_kernel_targets} ${nvrtc_kernel_targets})
+add_dependencies(cuda_scan_by_key ${nvrtc_kernel_targets})
 
 target_include_directories (afcuda
   PUBLIC
@@ -448,20 +510,17 @@ target_include_directories (afcuda
     ${ArrayFire_SOURCE_DIR}/src/api/c
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel
-    ${CMAKE_CURRENT_SOURCE_DIR}/JIT
+    ${CMAKE_CURRENT_SOURCE_DIR}/jit
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-if(OpenMP_CXX_FOUND)
-  target_link_libraries(afcuda
-    PRIVATE
-      OpenMP::OpenMP_CXX
-    )
-elseif(NOT APPLE)
-  message(FATAL_ERROR "OpenMP is required to compile CUDA Backend")
-endif()
-
 set_target_properties(afcuda PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Remove cublas_device library which is no longer included with the cuda
+# toolkit. Fixes issues with older CMake versions
+if(DEFINED CUDA_cublas_device_LIBRARY AND NOT CUDA_cublas_device_LIBRARY)
+  list(REMOVE_ITEM CUDA_CUBLAS_LIBRARIES ${CUDA_cublas_device_LIBRARY})
+endif()
 
 target_link_libraries(afcuda
   PRIVATE
@@ -476,6 +535,8 @@ target_link_libraries(afcuda
     ${CUDA_CUFFT_LIBRARIES}
     ${CUDA_cusolver_LIBRARY}
     ${CUDA_cusparse_LIBRARY}
+    ${CUDA_cudnn_LIBRARY}
+    ${CMAKE_DL_LIBS}
   )
 
 # If the driver is not found the cuda driver api need to be linked against the
@@ -533,12 +594,12 @@ macro(afcu_collect_libs libname)
     get_filename_component(outpath "${dlib_path_prefix}/${PX}${libname}.${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}${SX}" REALPATH)
     install(FILES       "${outpath}"
             DESTINATION ${AF_INSTALL_BIN_DIR}
-            RENAME      "${PX}${libname}${SX}.${CUDA_VERSION}"
+            RENAME      "${PX}${libname}.${CUDA_VERSION}${SX}"
             COMPONENT   cuda_dependencies)
   else () #UNIX
     get_filename_component(outpath "${dlib_path_prefix}/${PX}${libname}${SX}" REALPATH)
     install(FILES       ${outpath}
-            DESTINATION ${AF_INSTALL_BIN_DIR}
+            DESTINATION ${AF_INSTALL_LIB_DIR}
             RENAME      "${PX}${libname}${SX}.${CUDA_VERSION}"
             COMPONENT   cuda_dependencies)
   endif ()
@@ -549,7 +610,14 @@ if(AF_INSTALL_STANDALONE)
   afcu_collect_libs(cublas)
   afcu_collect_libs(cusolver)
   afcu_collect_libs(cusparse)
-  afcu_collect_libs(nvrtc)
+
+  if(WIN32 AND ${CUDA_VERSION_MAJOR} EQUAL 10 AND ${CUDA_VERSION_MINOR} EQUAL 0)
+    install(FILES       "${dlib_path_prefix}/${PX}nvrtc64_100_0${SX}"
+            DESTINATION ${AF_INSTALL_BIN_DIR}
+            COMPONENT   cuda_dependencies)
+  else()
+    afcu_collect_libs(nvrtc)
+  endif()
 
   if(APPLE)
     afcu_collect_libs(cudart)
@@ -562,7 +630,7 @@ if(AF_INSTALL_STANDALONE)
   elseif(UNIX)
     get_filename_component(nvrtc_outpath "${dlib_path_prefix}/${PX}nvrtc-builtins${SX}" REALPATH)
     install(FILES       ${nvrtc_outpath}
-            DESTINATION ${AF_INSTALL_BIN_DIR}
+            DESTINATION ${AF_INSTALL_LIB_DIR}
             RENAME      "${PX}nvrtc-builtins${SX}"
             COMPONENT   cuda_dependencies)
   else()

@@ -75,9 +75,20 @@ namespace af
     ///
     /// \param[in] device the ID of the device to query
     ///
-    /// \returns true if the \p device supports double precision operations. false otherwise
+    /// \returns true if the \p device supports double precision operations.
+    ///          false otherwise
     /// \ingroup device_func_dbl
     AFAPI bool isDoubleAvailable(const int device);
+
+    /// \brief Queries the current device for half precision floating point
+    ///        support
+    ///
+    /// \param[in] device the ID of the device to query
+    ///
+    /// \returns true if the \p device supports half precision operations.
+    ///          false otherwise
+    /// \ingroup device_func_half
+    AFAPI bool isHalfAvailable(const int device);
 
     /// \brief Sets the current device
     ///
@@ -279,6 +290,11 @@ extern "C" {
     AFAPI af_err af_get_dbl_support(bool* available, const int device);
 
     /**
+       \ingroup device_func_half
+    */
+    AFAPI af_err af_get_half_support(bool *available, const int device);
+
+    /**
        \ingroup device_func_set
     */
     AFAPI af_err af_set_device(const int device);
@@ -296,14 +312,16 @@ extern "C" {
     /**
        \ingroup device_func_alloc
 
-       This device memory returned by this function can only be freed using af_free_device
+       This device memory returned by this function can only be freed using
+       af_free_device
     */
     AFAPI af_err af_alloc_device(void **ptr, const dim_t bytes);
 
     /**
        \ingroup device_func_free
 
-       This function will free a device pointer even if it has been previously locked.
+       This function will free a device pointer even if it has been previously
+       locked.
     */
     AFAPI af_err af_free_device(void *ptr);
 
@@ -335,7 +353,7 @@ extern "C" {
        Create array from device memory
        \ingroup construct_mat
     */
-    AFAPI af_err af_device_array(af_array *arr, const void *data, const unsigned ndims, const dim_t * const dims, const af_dtype type);
+    AFAPI af_err af_device_array(af_array *arr, void *data, const unsigned ndims, const dim_t * const dims, const af_dtype type);
 
     /**
        Get memory information from the memory manager
@@ -345,17 +363,28 @@ extern "C" {
                                     size_t *lock_bytes, size_t *lock_buffers);
 
 #if AF_API_VERSION >= 33
-    ///
-    /// Prints buffer details from the ArrayFire Device Manager
-    //
-    /// \param [in] msg A message to print before the table
-    /// \param [in] device_id print the memory info of the specified device.
-    ///  -1 signifies active device.
-    ///
-    /// return AF_SUCCESS if successful
-    ///
-    /// \ingroup device_func_mem
-    ///
+    /**
+       Prints buffer details from the ArrayFire Device Manager.
+
+       The result is a table with several columns:
+
+        * POINTER:   The hex address of the array's device or pinned-memory
+                     pointer
+        * SIZE:      Human-readable size of the array
+        * AF LOCK:   Indicates whether ArrayFire is using this chunk of memory.
+                     If not, the chunk is ready for reuse.
+        * USER LOCK: If set, ArrayFire is prevented from freeing this memory.
+                     The chunk is not ready for re-use even if all ArrayFire's
+                     references to it go out of scope.
+
+       \param [in] msg A message to print before the table
+       \param [in] device_id print the memory info of the specified device.
+       -1 signifies active device.
+      
+       \returns AF_SUCCESS if successful
+      
+       \ingroup device_func_mem
+    */
     AFAPI af_err af_print_mem_info(const char *msg, const int device_id);
 #endif
 
@@ -385,7 +414,7 @@ extern "C" {
        \ingroup device_func_mem
     */
 #if AF_API_VERSION >= 33
-    DEPRECATED("Use af_lock_array instead")
+    AF_DEPRECATED("Use af_lock_array instead")
 #endif
     AFAPI af_err af_lock_device_ptr(const af_array arr);
 #endif
@@ -398,7 +427,7 @@ extern "C" {
        \ingroup device_func_mem
     */
 #if AF_API_VERSION >= 33
-    DEPRECATED("Use af_unlock_array instead")
+    AF_DEPRECATED("Use af_unlock_array instead")
 #endif
     AFAPI af_err af_unlock_device_ptr(const af_array arr);
 #endif

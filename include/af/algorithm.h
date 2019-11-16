@@ -306,11 +306,11 @@ namespace af
     template<typename T> void max(T *val, unsigned *idx, const array &in);
 
     /**
-       C++ Interface inclusive sum (cumulative sum) of an array
+       C++ Interface for computing the cumulative sum (inclusive) of an array
 
        \param[in] in is the input array
-       \param[in] dim The dimension along which exclusive sum is performed
-       \return the output containing exclusive sums of the input
+       \param[in] dim is the dimension along which the inclusive sum is calculated
+       \return the output containing inclusive sums of the input
 
        \ingroup scan_func_accum
     */
@@ -429,24 +429,24 @@ namespace af
     AFAPI array setUnique(const array &in, const bool is_sorted=false);
 
     /**
-       C++ Interface for performing union of two arrays
+       C++ Interface for finding the union of two arrays
 
-       \param[in] first is the first array
-       \param[in] second is the second array
+       \param[in] first is the first input array
+       \param[in] second is the second input array
        \param[in] is_unique if true, skips calling unique internally
-       \return the union of \p first and \p second
+       \return all unique values present in \p first and \p second (union) in increasing order
 
        \ingroup set_func_union
     */
     AFAPI array setUnion(const array &first, const array &second, const bool is_unique=false);
 
     /**
-       C++ Interface for performing intersect of two arrays
+       C++ Interface for finding the intersection of two arrays
 
-       \param[in] first is the first array
-       \param[in] second is the second array
+       \param[in] first is the first input array
+       \param[in] second is the second input array
        \param[in] is_unique if true, skips calling unique internally
-       \return the intersection of \p first and \p second
+       \return unique values that are present in both \p first and \p second(intersection) in increasing order
 
        \ingroup set_func_intersect
     */
@@ -761,11 +761,11 @@ extern "C" {
     AFAPI af_err af_imax_all(double *real, double *imag, unsigned *idx, const af_array in);
 
     /**
-       C Interface inclusive sum (cumulative sum) of an array
+       C Interface for computing the cumulative sum (inclusive) of an array
 
-       \param[out] out will contain exclusive sums of the input
+       \param[out] out will contain inclusive sums of the input
        \param[in] in is the input array
-       \param[in] dim The dimension along which exclusive sum is performed
+       \param[in] dim is the dimension along which the inclusive sum is calculated
        \return \ref AF_SUCCESS if the execution completes properly
 
        \ingroup scan_func_accum
@@ -895,11 +895,11 @@ extern "C" {
     AFAPI af_err af_set_unique(af_array *out, const af_array in, const bool is_sorted);
 
     /**
-       C Interface for performing union of two arrays
+       C Interface for finding the union of two arrays
 
        \param[out] out will contain the union of \p first and \p second
-       \param[in] first is the first array
-       \param[in] second is the second array
+       \param[in] first is the first input array
+       \param[in] second is the second input array
        \param[in] is_unique if true, skips calling unique internally
        \return \ref AF_SUCCESS if the execution completes properly
 
@@ -908,11 +908,11 @@ extern "C" {
     AFAPI af_err af_set_union(af_array *out, const af_array first, const af_array second, const bool is_unique);
 
     /**
-       C Interface for performing intersect of two arrays
+       C Interface for finding the intersection of two arrays
 
        \param[out] out will contain the intersection of \p first and \p second
-       \param[in] first is the first array
-       \param[in] second is the second array
+       \param[in] first is the first input array
+       \param[in] second is the second input array
        \param[in] is_unique if true, skips calling unique internally
        \return \ref AF_SUCCESS if the execution completes properly
 

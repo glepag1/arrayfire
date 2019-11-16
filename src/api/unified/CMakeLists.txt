@@ -9,6 +9,7 @@ target_sources(af
     ${CMAKE_CURRENT_SOURCE_DIR}/arith.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/blas.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/data.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/error.cpp
@@ -18,6 +19,7 @@ target_sources(af
     ${CMAKE_CURRENT_SOURCE_DIR}/index.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/internal.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lapack.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ml.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/moments.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/signal.cpp
@@ -29,22 +31,29 @@ target_sources(af
     ${CMAKE_CURRENT_SOURCE_DIR}/vision.cpp
   )
 
-
 target_sources(af
   PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/api/c/version.cpp
-    ${CMAKE_SOURCE_DIR}/src/api/c/type_util.cpp
-    ${CMAKE_SOURCE_DIR}/src/backend/common/dim4.cpp
-    ${CMAKE_SOURCE_DIR}/src/backend/common/err_common.cpp
-    ${CMAKE_SOURCE_DIR}/src/backend/common/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/backend/common/util.hpp
-    ${CMAKE_SOURCE_DIR}/src/backend/common/util.cpp
+    ${ArrayFire_SOURCE_DIR}/src/api/c/type_util.cpp
+    ${ArrayFire_SOURCE_DIR}/src/api/c/version.cpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/Logger.cpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/Logger.hpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/constants.cpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/dim4.cpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/err_common.cpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/util.cpp
+    ${ArrayFire_SOURCE_DIR}/src/backend/common/util.hpp
   )
 
-target_compile_definitions(af
-  PRIVATE
-    AFDLL
-  )
+arrayfire_set_default_cxx_flags(af)
+if(WIN32)
+  target_sources(af
+    PRIVATE
+      ${ArrayFire_SOURCE_DIR}/src/backend/common/module_loading_windows.cpp)
+else()
+  target_sources(af
+    PRIVATE
+      ${ArrayFire_SOURCE_DIR}/src/backend/common/module_loading_unix.cpp)
+endif()
 
 target_include_directories(af
   PUBLIC
@@ -53,14 +62,14 @@ target_include_directories(af
     $<INSTALL_INTERFACE:${AF_INSTALL_INC_DIR}>
   PRIVATE
     ${ArrayFire_SOURCE_DIR}/src/api/c
-    $<JOIN:$<TARGET_PROPERTY:afcommon_interface,INTERFACE_INCLUDE_DIRECTORIES>, >
+    $<TARGET_PROPERTY:afcommon_interface,INTERFACE_INCLUDE_DIRECTORIES>
     ${CMAKE_BINARY_DIR}
   )
-
 
 target_link_libraries(af
   PRIVATE
     cpp_api_interface
+    spdlog
     Threads::Threads
     ${CMAKE_DL_LIBS}
   )

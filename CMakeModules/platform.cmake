@@ -10,10 +10,6 @@
 # Add paths and flags specific platforms. This can inc
 
 if(APPLE)
-  # Some homebrew libraries(glbinding) are not installed in directories that
-  # CMake searches by default.
-  set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/usr/local/opt")
-
   # Default path for Intel MKL libraries
   set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/opt/intel/mkl/lib")
 endif()
@@ -24,12 +20,23 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(WIN32)
-  # C4251: Warnings about dll interfaces. Thrown by glbinding, may be fixed in
-  #        the future
   # C4068: Warnings about unknown pragmas
   # C4275: Warnings about using non-exported classes as base class of an
   #        exported class
-  add_compile_options(/wd4251 /wd4068 /wd4275)
+  add_compile_options(/wd4068 /wd4275)
 
-  set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}")
+  # MSVC incorrectly sets the cplusplus to 199711L even if the compiler supports
+  # c++11 features. This flag sets it to the correct standard supported by the
+  # compiler
+  check_cxx_compiler_flag(/Zc:__cplusplus cplusplus_define)
+  if(cplusplus_define)
+    add_compile_options(/Zc:__cplusplus)
+  endif()
+
+  # The "permissive-" option enforces strict(er?) standards compliance by
+  # MSVC
+  check_cxx_compiler_flag(/permissive- cxx_compliance)
+  if(cxx_compliance)
+    add_compile_options(/permissive-)
+  endif()
 endif()

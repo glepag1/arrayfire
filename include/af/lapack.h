@@ -30,12 +30,18 @@ namespace af
 
 #if AF_API_VERSION >= 31
     /**
-       C++ Interface for SVD decomposition
+       C++ Interface for SVD decomposition (in-place)
 
-       \param[out] u is the output array containing U
-       \param[out] s is the output array containing the diagonal values of sigma, (singular values of the input matrix))
-       \param[out] vt is the output array containing V^H
-       \param[inout] in is the input matrix and will contain random data after this operation
+       \param[out]    u is the output array containing U
+       \param[out]    s is the output array containing the diagonal values of sigma,
+                        (singular values of the input matrix))
+       \param[out]    vt is the output array containing V^H
+       \param[in,out] in is the input matrix and will contain random data after
+                         this operation
+
+       \note Currently, \p in is limited to arrays where `dim0` \f$\geq\f$ `dim1`
+       \note This is best used when minimizing memory usage and \p in is
+             dispensable
 
        \ingroup lapack_factor_func_svd
     */
@@ -200,6 +206,28 @@ namespace af
     */
     AFAPI array inverse(const array &in, const matProp options = AF_MAT_NONE);
 
+#if AF_API_VERSION >= 37
+    /**
+       C++ Interface for pseudo-inverting (Moore-Penrose) a matrix.
+       Currently uses the SVD-based approach.
+
+       \param[in] in is the input matrix
+       \param[in] tol defines the lower threshold for singular values from SVD
+       \param[in] options must be AF_MAT_NONE (more options might be supported
+                  in the future)
+       \returns the pseudo-inverse of the input matrix
+
+       \note \p tol is not the actual lower threshold, but it is passed in as
+             a parameter to the calculation of the actual threshold relative to
+             the shape and contents of \p in.
+       \note This function is not supported in GFOR
+
+       \ingroup lapack_ops_func_pinv
+    */
+    AFAPI array pinverse(const array &in, const double tol=1E-6,
+                         const matProp options = AF_MAT_NONE);
+#endif
+
     /**
        C++ Interface for finding the rank of a matrix
 
@@ -272,12 +300,18 @@ extern "C" {
 
 #if AF_API_VERSION >= 31
     /**
-       C Interface for SVD decomposition
+       C Interface for SVD decomposition (in-place)
 
-       \param[out] u is the output array containing U
-       \param[out] s is the output array containing the diagonal values of sigma, (singular values of the input matrix))
-       \param[out] vt is the output array containing V^H
-       \param[inout] in is the input matrix that will contain random data after this operation
+       \param[out]    u  is the output array containing U
+       \param[out]    s  is the output array containing the diagonal values of
+                         sigma, (singular values of the input matrix))
+       \param[out]    vt is the output array containing V^H
+       \param[in,out] in is the input matrix that will contain random data after
+                         this operation
+
+       \note Currently, \p in is limited to arrays where `dim0` \f$\geq\f$ `dim1`
+       \note This is best used when minimizing memory usage and \p in is
+             dispensable
 
        \ingroup lapack_factor_func_svd
     */
@@ -400,6 +434,30 @@ extern "C" {
        \note currently options needs to be \ref AF_MAT_NONE
     */
     AFAPI af_err af_inverse(af_array *out, const af_array in, const af_mat_prop options);
+
+#if AF_API_VERSION >= 37
+    /**
+       C Interface for pseudo-inverting (Moore-Penrose) a matrix.
+       Currently uses the SVD-based approach.
+
+       \param[out] out will contain the pseudo-inverse of matrix \p in
+       \param[in] in is the input matrix
+       \param[in] tol defines the lower threshold for singular values from SVD
+       \param[in] options must be AF_MAT_NONE (more options might be supported
+       in the future)
+
+       \note \p tol is not the actual lower threshold, but it is passed in as a
+             parameter to the calculation of the actual threshold relative to the
+             shape and contents of \p in.
+       \note At first, try setting \p tol to 1e-6 for single precision and 1e-12
+             for double.
+       \note This function is not supported in GFOR
+
+       \ingroup lapack_ops_func_pinv
+    */
+    AFAPI af_err af_pinverse(af_array *out, const af_array in, const double tol,
+                             const af_mat_prop options);
+#endif
 
     /**
        C Interface for finding the rank of a matrix

@@ -9,19 +9,17 @@
 
 #pragma once
 #include <Param.hpp>
+#include <ops.hpp>
+#include <common/half.hpp>
 
-namespace cpu
-{
-namespace kernel
-{
+namespace cpu {
+namespace kernel {
 
 template<af_op_t op, typename Ti, typename To, int D>
-struct reduce_dim
-{
-    void operator()(Param<To> out, const dim_t outOffset,
-                    CParam<Ti> in, const dim_t inOffset,
-                    const int dim, bool change_nan, double nanval)
-    {
+struct reduce_dim {
+    void operator()(Param<To> out, const dim_t outOffset, CParam<Ti> in,
+                    const dim_t inOffset, const int dim, bool change_nan,
+                    double nanval) {
         static const int D1 = D - 1;
         reduce_dim<op, Ti, To, D1> reduce_dim_next;
 
@@ -30,40 +28,37 @@ struct reduce_dim
         const af::dim4 odims    = out.dims();
 
         for (dim_t i = 0; i < odims[D1]; i++) {
-            reduce_dim_next(out, outOffset + i * ostrides[D1],
-                            in, inOffset + i * istrides[D1],
-                            dim, change_nan, nanval);
+            reduce_dim_next(out, outOffset + i * ostrides[D1], in,
+                            inOffset + i * istrides[D1], dim, change_nan,
+                            nanval);
         }
     }
 };
 
 template<af_op_t op, typename Ti, typename To>
-struct reduce_dim<op, Ti, To, 0>
-{
-
-    Transform<Ti, To, op> transform;
-    Binary<To, op> reduce;
-    void operator()(Param<To> out, const dim_t outOffset,
-                    CParam<Ti> in, const dim_t inOffset,
-                    const int dim, bool change_nan, double nanval)
-    {
+struct reduce_dim<op, Ti, To, 0> {
+    Transform<data_t<Ti>, compute_t<To>, op> transform;
+    Binary<compute_t<To>, op> reduce;
+    void operator()(Param<To> out, const dim_t outOffset, CParam<Ti> in,
+                    const dim_t inOffset, const int dim, bool change_nan,
+                    double nanval) {
         const af::dim4 istrides = in.strides();
         const af::dim4 idims    = in.dims();
 
-        To * const outPtr = out.get() + outOffset;
-        Ti const * const inPtr = in.get() + inOffset;
-        dim_t stride = istrides[dim];
+        data_t<To> * const outPtr      = out.get() + outOffset;
+        data_t<Ti> const* const inPtr = in.get() + inOffset;
+        dim_t stride          = istrides[dim];
 
-        To out_val = Binary<To, op>::init();
+        compute_t<To> out_val = Binary<compute_t<To>, op>::init();
         for (dim_t i = 0; i < idims[dim]; i++) {
-            To in_val = transform(inPtr[i * stride]);
+            compute_t<To> in_val = transform(inPtr[i * stride]);
             if (change_nan) in_val = IS_NAN(in_val) ? nanval : in_val;
             out_val = reduce(in_val, out_val);
         }
 
-        *outPtr = out_val;
+        *outPtr = data_t<To>(out_val);
     }
 };
 
-}
-}
+}  // namespace kernel
+}  // namespace cpu

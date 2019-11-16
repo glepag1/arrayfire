@@ -8,20 +8,23 @@
  ********************************************************/
 
 #include "reduce_impl.hpp"
+#include <common/half.hpp>
 
-namespace opencl
-{
-    //anytrue
-    INSTANTIATE(af_or_t, float  , char)
-    INSTANTIATE(af_or_t, double , char)
-    INSTANTIATE(af_or_t, cfloat , char)
-    INSTANTIATE(af_or_t, cdouble, char)
-    INSTANTIATE(af_or_t, int    , char)
-    INSTANTIATE(af_or_t, uint   , char)
-    INSTANTIATE(af_or_t, intl   , char)
-    INSTANTIATE(af_or_t, uintl  , char)
-    INSTANTIATE(af_or_t, char   , char)
-    INSTANTIATE(af_or_t, uchar  , char)
-    INSTANTIATE(af_or_t, short  , char)
-    INSTANTIATE(af_or_t, ushort , char)
-}
+using common::half;
+
+namespace opencl {
+// anytrue
+INSTANTIATE(af_or_t, float, char)
+INSTANTIATE(af_or_t, double, char)
+INSTANTIATE(af_or_t, cfloat, char)
+INSTANTIATE(af_or_t, cdouble, char)
+INSTANTIATE(af_or_t, int, char)
+INSTANTIATE(af_or_t, uint, char)
+INSTANTIATE(af_or_t, intl, char)
+INSTANTIATE(af_or_t, uintl, char)
+INSTANTIATE(af_or_t, char, char)
+INSTANTIATE(af_or_t, uchar, char)
+INSTANTIATE(af_or_t, short, char)
+INSTANTIATE(af_or_t, ushort, char)
+INSTANTIATE(af_or_t, half, char)
+}  // namespace opencl

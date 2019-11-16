@@ -5,6 +5,15 @@
 # The complete license agreement can be obtained at:
 # http://arrayfire.com/licenses/BSD-3-Clause
 
+set(AF_TEST_WITH_MTX_FILES
+    ON CACHE BOOL
+    "Download and run tests on large matrices form sparse.tamu.edu")
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+if (AF_TEST_WITH_MTX_FILES)
+  include(download_sparse_datasets)
+endif ()
+
 if(NOT TARGET gtest)
   # gtest targets cmake version 2.6 which throws warnings for policy CMP0042 on
   # newer cmakes. This sets the default global setting for that policy.
@@ -14,7 +23,7 @@ if(NOT TARGET gtest)
         CACHE INTERNAL "Required so that the libs Runtime is not set to MT DLL")
   endif()
 
-  add_subdirectory(gtest/googletest EXCLUDE_FROM_ALL)
+  add_subdirectory(gtest EXCLUDE_FROM_ALL)
   set_target_properties(gtest gtest_main
     PROPERTIES
       FOLDER "ExternalProjectTargets/gtest")
@@ -29,8 +38,12 @@ if(NOT TARGET gtest)
     gtest_hide_internal_symbols)
 endif()
 
+if(AF_TEST_WITH_MTX_FILES AND NOT TARGET mmio)
+  add_subdirectory(mmio)
+endif()
+
 # Reset the CXX flags for tests
-unset(CMAKE_CXX_STANDARD)
+set(CMAKE_CXX_STANDARD 98)
 set(TESTDATA_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data")
 
 if(${AF_USE_RELATIVE_TEST_DIR})
@@ -74,7 +87,7 @@ include(CMakeParseArguments)
 # 'BACKENDS'    Backends to target for this test. If not set then the test will
 #               compiled againat all backends
 function(make_test)
-  set(options CXX11)
+  set(options CXX11 SERIAL)
   set(single_args SRC)
   set(multi_args LIBRARIES DEFINITIONS BACKENDS)
   cmake_parse_arguments(mt_args "${options}" "${single_args}" "${multi_args}" ${ARGN})
@@ -89,6 +102,7 @@ function(make_test)
     add_executable(${target} ${mt_args_SRC})
     target_include_directories(${target}
       PRIVATE
+        ${ArrayFire_SOURCE_DIR}/extern/half/include
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}
       )
@@ -102,9 +116,7 @@ function(make_test)
     if(${backend} STREQUAL "unified")
       target_link_libraries(${target}
         PRIVATE
-          af
-          ${CMAKE_DL_LIBS}
-          )
+          af)
     else()
       target_link_libraries(${target}
         PRIVATE
@@ -130,30 +142,40 @@ function(make_test)
         ${mt_args_DEFINITIONS}
       )
     if(WIN32)
+      target_compile_options(${target}
+        PRIVATE
+          /bigobj
+          /EHsc)
       target_compile_definitions(${target}
         PRIVATE
           WIN32_LEAN_AND_MEAN
-          NOMINMAX
-        )
+          NOMINMAX)
     endif()
 
     # TODO(umar): Create this executable separately
     if(NOT ${backend} STREQUAL "unified" OR ${target} STREQUAL "backend_unified")
       add_test(NAME ${target} COMMAND ${target})
+	    if(${mt_args_SERIAL})
+        set_tests_properties(${target}
+          PROPERTIES
+            RUN_SERIAL ON)
+	    endif(${mt_args_SERIAL})
     endif()
+
   endforeach()
 endfunction(make_test)
 
 make_test(SRC anisotropic_diffusion.cpp)
 make_test(SRC approx1.cpp)
 make_test(SRC approx2.cpp)
-make_test(SRC array.cpp)
-make_test(SRC assign.cpp)
+make_test(SRC array.cpp CXX11)
+make_test(SRC arrayio.cpp)
+make_test(SRC assign.cpp CXX11)
 make_test(SRC backend.cpp)
 make_test(SRC basic.cpp)
 make_test(SRC basic_c.c)
 make_test(SRC bilateral.cpp)
-make_test(SRC binary.cpp)
+make_test(SRC binary.cpp CXX11)
 make_test(SRC blas.cpp)
 make_test(SRC canny.cpp)
 make_test(SRC cast.cpp)
@@ -162,7 +184,7 @@ make_test(SRC clamp.cpp)
 make_test(SRC compare.cpp)
 make_test(SRC complex.cpp)
 make_test(SRC constant.cpp)
-make_test(SRC convolve.cpp)
+make_test(SRC convolve.cpp CXX11)
 make_test(SRC corrcoef.cpp)
 make_test(SRC covariance.cpp)
 make_test(SRC diagonal.cpp)
@@ -180,11 +202,12 @@ make_test(SRC flat.cpp)
 make_test(SRC flip.cpp)
 make_test(SRC gaussiankernel.cpp)
 make_test(SRC gen_assign.cpp)
-make_test(SRC gen_index.cpp)
+make_test(SRC gen_index.cpp CXX11)
 make_test(SRC getting_started.cpp)
 make_test(SRC gfor.cpp)
 make_test(SRC gradient.cpp)
 make_test(SRC gray_rgb.cpp)
+make_test(SRC half.cpp)
 make_test(SRC hamming.cpp)
 make_test(SRC harris.cpp)
 make_test(SRC histogram.cpp)
@@ -192,22 +215,25 @@ make_test(SRC homography.cpp)
 make_test(SRC hsv_rgb.cpp)
 make_test(SRC iir.cpp)
 make_test(SRC imageio.cpp)
-make_test(SRC index.cpp)
+make_test(SRC index.cpp CXX11)
 make_test(SRC info.cpp)
 make_test(SRC internal.cpp)
-make_test(SRC inverse_dense.cpp)
+make_test(SRC inverse_deconv.cpp)
+make_test(SRC inverse_dense.cpp SERIAL)
 make_test(SRC iota.cpp)
 make_test(SRC ireduce.cpp)
-make_test(SRC jit.cpp)
+make_test(SRC iterative_deconv.cpp)
+make_test(SRC jit.cpp CXX11)
 make_test(SRC join.cpp)
-make_test(SRC lu_dense.cpp)
+make_test(SRC lu_dense.cpp SERIAL)
 make_test(SRC main.cpp)
 #make_test(manual_memory_test.cpp)
 make_test(SRC match_template.cpp)
-make_test(SRC math.cpp)
+make_test(SRC math.cpp CXX11)
 make_test(SRC matrix_manipulation.cpp)
 make_test(SRC mean.cpp)
 make_test(SRC meanshift.cpp)
+make_test(SRC meanvar.cpp CXX11)
 make_test(SRC medfilt.cpp)
 make_test(SRC median.cpp)
 make_test(SRC memory.cpp)
@@ -216,7 +242,7 @@ make_test(SRC missing.cpp)
 make_test(SRC moddims.cpp)
 make_test(SRC moments.cpp)
 make_test(SRC morph.cpp)
-make_test(SRC nearest_neighbour.cpp)
+make_test(SRC nearest_neighbour.cpp CXX11)
 
 if(OpenCL_FOUND)
   make_test(SRC ocl_ext_context.cpp
@@ -225,22 +251,24 @@ if(OpenCL_FOUND)
 endif()
 
 make_test(SRC orb.cpp)
-make_test(SRC qr_dense.cpp)
+make_test(SRC pinverse.cpp)
+make_test(SRC qr_dense.cpp SERIAL)
 make_test(SRC random.cpp)
 make_test(SRC range.cpp)
-make_test(SRC rank_dense.cpp)
+make_test(SRC rank_dense.cpp SERIAL)
 make_test(SRC reduce.cpp)
 make_test(SRC regions.cpp)
 make_test(SRC reorder.cpp)
 make_test(SRC replace.cpp)
 make_test(SRC resize.cpp)
+make_test(SRC rng_match.cpp CXX11 BACKENDS "unified")
 make_test(SRC rotate.cpp)
 make_test(SRC rotate_linear.cpp)
 make_test(SRC sat.cpp)
 make_test(SRC scan.cpp)
 make_test(SRC scan_by_key.cpp)
 make_test(SRC select.cpp)
-make_test(SRC set.cpp)
+make_test(SRC set.cpp CXX11)
 make_test(SRC shift.cpp)
 
 if(AF_WITH_NONFREE)
@@ -249,17 +277,19 @@ if(AF_WITH_NONFREE)
 endif()
 
 make_test(SRC sobel.cpp)
-make_test(SRC solve_dense.cpp       CXX11)
+make_test(SRC solve_dense.cpp       CXX11 SERIAL)
 make_test(SRC sort.cpp)
 make_test(SRC sort_by_key.cpp)
 make_test(SRC sort_index.cpp)
-make_test(SRC sparse.cpp)
-make_test(SRC sparse_arith.cpp)
+make_test(SRC sparse.cpp SERIAL
+    $<$<BOOL:${AF_TEST_WITH_MTX_FILES}>:LIBRARIES mmio>)
+make_test(SRC sparse_arith.cpp
+    $<$<BOOL:${AF_TEST_WITH_MTX_FILES}>:LIBRARIES mmio>)
 make_test(SRC sparse_convert.cpp)
 make_test(SRC stdev.cpp)
 make_test(SRC susan.cpp)
-make_test(SRC svd_dense.cpp)
-make_test(SRC threading.cpp         CXX11)
+make_test(SRC svd_dense.cpp         SERIAL)
+make_test(SRC threading.cpp         CXX11 SERIAL)
 make_test(SRC tile.cpp)
 make_test(SRC topk.cpp              CXX11)
 make_test(SRC transform.cpp)
@@ -274,3 +304,18 @@ make_test(SRC where.cpp)
 make_test(SRC wrap.cpp)
 make_test(SRC write.cpp)
 make_test(SRC ycbcr_rgb.cpp)
+
+if(AF_TEST_WITH_MTX_FILES)
+    make_test(SRC matrixmarket.cpp LIBRARIES mmio)
+endif()
+
+add_executable(print_info print_info.cpp)
+if(AF_BUILD_UNIFIED)
+  target_link_libraries(print_info ArrayFire::af)
+elseif(AF_BUILD_OPENCL)
+  target_link_libraries(print_info ArrayFire::afopencl)
+elseif(AF_BUILD_CUDA)
+  target_link_libraries(print_info ArrayFire::afcuda)
+elseif(AF_BUILD_CPU)
+  target_link_libraries(print_info ArrayFire::afcpu)
+endif()

@@ -143,7 +143,7 @@ Logical not of an input
 
 \defgroup arith_func_neg neg
 
-\ingroup logic_mat
+\ingroup numeric_mat
 
 Negative of an input
 
@@ -438,6 +438,22 @@ Find root of an input
 
 Raise an array to a power
 
+If the input array has values beyond what a floating point type can represent, then there is no
+guarantee that the results will be accurate. The exact type mapping from integral types to floating
+point types used to compute power is given below.
+
+| Input Type         | Compute Type   |
+| :------------------| :--------------|
+| unsigned long long | double         |
+| long long          | double         |
+| unsigned int       | double         |
+| int                | double         |
+| unsigned short     | float          |
+| short              | float          |
+| unsigned char      | float          |
+
+The output array will be of the same type as input.
+
 \copydoc arith_real_only
 
 
@@ -512,6 +528,15 @@ Square root of input arrays
 
 \copydoc arith_real_only
 
+\defgroup arith_func_rsqrt rsqrt
+
+\ingroup explog_mat
+
+The reciprocal or inverse square root of input arrays
+
+\f[ \frac{1}{\sqrt{x}} \f]
+
+\copydoc arith_real_only
 
 \defgroup arith_func_cbrt cbrt
 

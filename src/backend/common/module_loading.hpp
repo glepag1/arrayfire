@@ -8,9 +8,10 @@
  ********************************************************/
 
 #include <common/defines.hpp>
-#include <string>
 
 namespace common {
+
+void* getFunctionPointer(LibHandle handle, const char* symbolName);
 
 LibHandle loadLibrary(const char* library_name);
 
@@ -18,4 +19,4 @@ void unloadLibrary(LibHandle handle);
 
 std::string getErrorMessage();
 
-}
+}  // namespace common

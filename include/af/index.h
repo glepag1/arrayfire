@@ -20,7 +20,7 @@
 /// object with the same \ref af_seq::begin and \ref af_seq::end with an
 /// af_seq::step of 1
 ///
-typedef struct af_index_t{
+typedef struct af_index_t {
     union {
         af_array arr;   ///< The af_array used for indexing
         af_seq   seq;   ///< The af_seq used for indexing
@@ -138,7 +138,7 @@ class AFAPI index {
     ///
     index & operator=(const index& idx0);
 
-#if __cplusplus > 199711L
+#if AF_COMPILER_CXX_RVALUE_REFERENCES
     ///
     /// \brief Move constructor
     ///
@@ -157,12 +157,12 @@ class AFAPI index {
 };
 
 ///
-/// Lookup the values of input array based on index
+/// Lookup the values of an input array by indexing with another array
 ///
-/// \param[in] in is input lookup array
-/// \param[in] idx is lookup indices
+/// \param[in] in is the input array that will be queried
+/// \param[in] idx are the lookup indices
 /// \param[in] dim specifies the dimension for indexing
-/// \returns an array containing values at locations specified by \p index
+/// \returns an array containing values of \p in at locations specified by \p index
 ///
 /// \ingroup index_func_lookup
 ///
@@ -213,12 +213,12 @@ extern "C" {
 
 
     ///
-    /// Lookup the values of input array based on index
+    /// Lookup the values of an input array by indexing with another array
     ///
-    /// \param[out] out      output array containing values at locations
-    ///                      specified by \p index
-    /// \param[in] in        is input lookup array
-    /// \param[in] indices   is lookup indices
+    /// \param[out] out      output array containing values of \p in at locations
+    ///                      specified by \p indices
+    /// \param[in] in        is the input array that will be queried
+    /// \param[in] indices   are the lookup indices
     /// \param[in] dim       specifies the dimension for indexing
     ///
     /// \ingroup index_func_lookup
